@@ -6913,8 +6913,20 @@ var MBClient = (function () {
     key = 'mb_prog_' + (D.sourceId || 'x') + '_' + String(st.program.client.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
     try {
       var loc = JSON.parse(localStorage.getItem(key) || 'null');
-      if (loc && loc.savedAt > st.savedAt && loc.program) { st.program = MB.normalizeProgram(loc.program); st.design = loc.design || st.design; st.completed = loc.completed || st.completed; st.feedback = loc.feedback || st.feedback; st.materiel = loc.materiel || st.materiel; }
+      if (loc && loc.program) {
+        if (isCoachFile) {
+          if (loc.savedAt > st.savedAt) { st.program = MB.normalizeProgram(loc.program); st.design = loc.design || st.design; st.completed = loc.completed || st.completed; st.feedback = loc.feedback || st.feedback; st.materiel = loc.materiel || st.materiel; }
+        } else if (loc.fileStamp && loc.fileStamp === D.savedAt) {
+          /* même version du fichier : on reprend l'état du client (adaptations, séances faites) */
+          st.program = MB.normalizeProgram(loc.program); st.design = loc.design || st.design; st.completed = loc.completed || st.completed; st.feedback = loc.feedback || st.feedback; st.materiel = loc.materiel || st.materiel;
+        } else {
+          /* nouvelle version du coach : son programme s'applique, les séances faites et le suivi du client sont conservés */
+          var done = (st.completed || []).slice(); (loc.completed || []).forEach(function (n) { if (done.indexOf(n) === -1) done.push(n); });
+          st.completed = done; st.feedback = Object.assign({}, st.feedback || {}, loc.feedback || {}); st.materiel = loc.materiel || st.materiel;
+        }
+      }
     } catch (e) {}
+    st.fileStamp = D.savedAt || 0;
     document.title = MB.BRAND.name + ' · ' + (st.program.client.name || 'Programme');
     if (!isCoachFile) { $('#mode-switch').remove(); $('#format-bar').remove(); }
     $('#prog-foot').textContent = MB.BRAND.name + ' · ' + MB.BRAND.tagline + ' · Programme préparé par ' + ((D.coach && D.coach.name) || 'votre coach');
