@@ -3738,6 +3738,19 @@ MB.normalizeProgram = function (prog) {
 };
 
 
+/* Séance au chrono (HIIT, Tabata, EMOM, 30-30…) : pas de nombres de répétitions sous les exercices */
+MB.isTimedSession = function (s) {
+  var h = ((s && s.rightHeader) || '') + ' ' + ((s && s.centerBanner) || '');
+  var timed = /chrono|hiit|hict|tabata|emom|amrap|metcon|circuit|\b\d+\s*(?:"|”|″|s|sec|secs)?\s*[\/-]\s*\d+\s*(?:"|”|″|s|sec|secs)\b|\b\d+\s*[\/-]\s*\d+\s*(?:"|”|″)/i.test(h);
+  var reps = /\d+\s*(?:reps?|répétitions?)\b|pyramide|\b\d+\s*[x×]\s*\d+/i.test(h);
+  return timed && !reps;
+};
+MB.exSub = function (s, ex) {
+  var sub = String((ex && ex.subtitle) || '');
+  if (MB.isTimedSession(s) && /\d+\s*(?:reps?|répétitions?|rép\.?)(?![a-zé])|\b\d+\s*[x×]\s*\d+|➔|^\s*\d+\s*(?:[-–]\s*\d+\s*)?(?:par|\/)/i.test(sub)) return '';
+  return sub;
+};
+
 /* ---------- Jauge de difficulté : adapte tout le plan (séries, temps de travail, repos, nombre d'exercices) ---------- */
 MB.DIFF_MAX = 9; MB.DIFF_MID = 5;
 MB.DIFF_LABELS = ['', 'Récupération', 'Très doux', 'Doux', 'Allégé', 'Standard (plan d’origine)', 'Soutenu', 'Intense', 'Très intense', 'Maximal'];
@@ -4457,11 +4470,12 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
         (opts.onDelete ? '<button type="button" class="icon-btn icon-btn-sm" data-del title="Retirer cet exercice" aria-label="Retirer cet exercice">' + MB.icon('trash') + '</button>' : '') + '</span>' : '') +
       '</div></article>');
     MB.$('.ex-title', card).textContent = ex.title;
-    MB.$('.ex-sub', card).textContent = ex.subtitle;
+    MB.$('.ex-sub', card).textContent = MB.exSub(s, ex);
+    if (!MB.exSub(s, ex)) MB.$('.ex-sub', card).hidden = true;
     grid.appendChild(card);
     var cv = MB.$('canvas', card);
     att(cv, ex.svgType);
-    MB.$('[data-demo]', card).addEventListener('click', function () { MB.viewer.open(ex.svgType, ex.title, ex.subtitle); });
+    MB.$('[data-demo]', card).addEventListener('click', function () { MB.viewer.open(ex.svgType, ex.title, MB.exSub(s, ex)); });
     var del = MB.$('[data-del]', card);
     if (del) del.addEventListener('click', function () { opts.onDelete(i); });
     var swap = MB.$('[data-swap]', card);
@@ -4565,7 +4579,7 @@ MB.views.week = function (headHost, host, prog, weekNum, done, onSelect) {
     MB.$('.week-card-day', card).textContent = s.day + ' · séance ' + s.id;
     MB.$('h4', card).textContent = s.centerBanner;
     var ul = MB.$('ul', card);
-    s.exercises.forEach(function (e) { var li = document.createElement('li'); li.innerHTML = '<span></span><small></small>'; li.firstChild.textContent = e.title; li.lastChild.textContent = String(e.subtitle).split(',')[0]; ul.appendChild(li); });
+    s.exercises.forEach(function (e) { var li = document.createElement('li'); li.innerHTML = '<span></span><small></small>'; li.firstChild.textContent = e.title; li.lastChild.textContent = String(MB.exSub(s, e)).split(',')[0]; ul.appendChild(li); });
     MB.$('button', card).addEventListener('click', function () { onSelect(s.id); });
     host.appendChild(card);
   });
@@ -8288,11 +8302,11 @@ var MBCoach = (function () {
   function openPage(ctxName) {
     if (!S.ctx[ctxName].prog) return;
     var html = MB.buildProgramPage(pageData(ctxName), 'coach');
-    var url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     var w = null;
-    try { w = window.open(url, '_blank'); } catch (e) { w = null; }
-    if (!w) { MB.download(fileName(ctxName, 'coach'), html, 'text/html;charset=utf-8'); MB.ui.toast('Fenêtre bloquée : la page a été téléchargée à la place.', 'warn'); return; }
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    if (!w) { MB.ui.toast('Fenêtre bloquée par le navigateur : autorisez les pop-ups pour ce site, puis recliquez sur « Page programme ».', 'warn'); return; }
+    try { w.document.open(); w.document.write(html); w.document.close(); }
+    catch (e) { try { w.close(); } catch (e2) {} MB.ui.toast('Impossible d’afficher la page programme.', 'err'); }
   }
   function fileName(ctxName, kind) {
     var n = (S.ctx[ctxName].prog.client.name || 'Client').replace(/[^\wÀ-ÿ-]+/g, '_');
