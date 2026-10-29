@@ -3747,8 +3747,12 @@ MB.isTimedSession = function (s) {
 };
 MB.exSub = function (s, ex) {
   var sub = String((ex && ex.subtitle) || '');
-  if (MB.isTimedSession(s) && /\d+\s*(?:reps?|répétitions?|rép\.?)(?![a-zé])|\b\d+\s*[x×]\s*\d+|➔|^\s*\d+\s*(?:[-–]\s*\d+\s*)?(?:par|\/)/i.test(sub)) return '';
-  return sub;
+  if (!MB.isTimedSession(s)) return sub;
+  var hasReps = /\d+\s*(?:reps?|répétitions?|rép\.?)(?![a-zé])|\d+\s*(?:fois|par\s+(?:jambe|côté|cote|bras)|de\s+chaque|chaque\s+côté)|\b\d+\s*[x×]\s*\d+|(?:^|\s)[x×]\s*\d+|➔|^\s*\d+(?:\s*[-–]\s*\d+)?\s*$/i.test(sub);
+  if (!hasReps) return sub;
+  var m = sub.match(/^\s*\d+(?:\s*[-–]\s*\d+)?\s*(?:reps?|répétitions?|rép\.?)\s*[,·;:]\s*(.+)$/i);
+  if (m && !/➔|\d+\s*(?:reps?|répétitions?)/i.test(m[1])) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+  return '';
 };
 
 /* ---------- Jauge de difficulté : adapte tout le plan (séries, temps de travail, repos, nombre d'exercices) ---------- */
@@ -4973,7 +4977,7 @@ MB.printProgram = function (prog, opts) {
       var img = snap(x.svgType);
       var info = MB.EXERCISES[x.svgType] || {};
       return '<figure class="pr-ex"><div class="pr-ex-img">' + (img ? '<img src="' + img + '" alt="">' : '<span>' + e(info.name || '') + '</span>') + '<b>' + (i + 1) + '</b></div>' +
-        '<figcaption><strong>' + e(x.title) + '</strong><span>' + e(x.subtitle) + '</span>' + (info.cues ? '<em>' + e(info.cues) + '</em>' : '') + '</figcaption></figure>';
+        '<figcaption><strong>' + e(x.title) + '</strong><span>' + e(MB.exSub(s, x)) + '</span>' + (info.cues ? '<em>' + e(info.cues) + '</em>' : '') + '</figcaption></figure>';
     }).join('');
     var volets = [['Échauffement', s.warmup], ['Finisher', s.finisher], ['Retour au calme', s.cooldown]].filter(function (v) { return v[1]; })
       .map(function (v) { return '<div><h4>' + v[0] + '</h4><p>' + e(v[1]) + '</p></div>'; }).join('');
