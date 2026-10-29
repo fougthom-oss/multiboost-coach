@@ -908,7 +908,7 @@ a.crm-line:hover { color: var(--petrol); }
     <div class="rail-foot">
       <button type="button" class="btn btn-primary btn-block" data-action="new-client"><i data-ic="plus"></i><span>Nouveau client</span></button>
       <button type="button" class="btn btn-ghost btn-block" data-nav="settings"><i data-ic="settings"></i><span>Paramètres</span></button>
-      <p class="muted" id="backup-note">Données enregistrées sur cet appareil. Pensez à la sauvegarde globale.</p>
+      <p class="muted" id="backup-note">Données synchronisées avec votre Google Sheet privé. Pensez quand même à la sauvegarde globale.</p>
     </div>
   </aside>
 
@@ -4013,7 +4013,7 @@ MB.GAMMES = { training: 'Training Boost', nutrition: 'Nutri Boost', multi: 'Mult
 
 MB.DEFAULT_SETTINGS = {
   coachName: 'Thomas', email: 'foug.thom@gmail.com', phone: '06 66 20 70 91', city: 'Jura', instagram: '', offerUrl: '',
-  notificationEmail: '', googleDriveFolderId: '', googleAppsScriptUrl: '',
+  notificationEmail: '', googleDriveFolderId: '', backupDriveFolder: '', googleAppsScriptUrl: '',
   heroTitle: 'Bougez mieux, *chez vous.*',
   offerTitle: 'Coaching sport santé à la maison',
   offerIntro: 'Des programmes au poids du corps, sans matériel, pensés pour votre santé : renforcement, silhouette, nutrition. Chaque exercice est animé en 3D et votre coach ajuste tout au fil des semaines.',
@@ -7319,6 +7319,296 @@ var MBSales = (function () {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', MBSales.boot); else MBSales.boot();
 
 </script>
+<script id="mb-cloud">
+/* =====================================================================
+   MBCloud — Synchronisation privée avec Google Sheets / Drive
+   Le Google Sheet est la source de vérité ; chaque appareil garde un cache
+   local pour fonctionner même sans réseau, puis se resynchronise.
+   Actif uniquement quand l'application est ouverte depuis l'URL Apps Script.
+   ===================================================================== */
+(function () {
+  'use strict';
+  if (!window.MB || !MB.store) return;
+  var inGoogle = /googleusercontent\.com$/i.test(location.hostname) || !!(window.google && google.script && google.script.run);
+  if (!inGoogle) return; // GitHub Pages / fichier local : fonctionnement local inchangé
+
+  var KEYS = ['patients', 'library', 'customOptions', 'packs', 'settings', 'leads'];
+  var META_KEY = '__mb_sync_meta';
+  var origGet = MB.store.get.bind(MB.store), origSet = MB.store.set.bind(MB.store);
+  var meta = { revs: {}, dirty: {}, files: {} };
+  var ver = {}, timers = {}, chains = {}, badge = null, banner = null, abandoned = false;
+
+  /* ---------- Appel serveur ---------- */
+  function call(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var r = window.google && google.script && google.script.run;
+      if (!r) { reject(new Error('Connexion Google indisponible')); return; }
+      r = r.withSuccessHandler(resolve).withFailureHandler(function (e) { reject(new Error((e && e.message) || String(e))); });
+      r[fn].apply(r, args);
+    });
+  }
+
+  /* ---------- Interface : pastille d'état, bandeau, blocage ---------- */
+  function setStatus(kind, text) {
+    if (!document.body) return;
+    if (!badge) {
+      badge = document.createElement('button'); badge.type = 'button'; badge.id = 'mb-cloud-badge';
+      badge.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9990;font:600 12px/1 system-ui,-apple-system,sans-serif;padding:7px 11px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18);cursor:pointer;opacity:.94';
+      badge.title = 'Cliquez pour synchroniser maintenant';
+      badge.addEventListener('click', function () { syncNow(); });
+      document.body.appendChild(badge);
+    }
+    badge.textContent = text;
+    badge.style.color = kind === 'ok' ? '#1c7c3b' : (kind === 'wait' ? '#1f2d5c' : '#b45309');
+  }
+  function goRefresh() {
+    call('mbInfo').then(function (i) {
+      try { window.top.location.href = i.url; } catch (e) { location.reload(); }
+      setTimeout(function () { location.reload(); }, 1500);
+    }, function () { location.reload(); });
+  }
+  function mkButton(label, light) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+    b.style.cssText = 'font:inherit;font-weight:700;padding:9px 15px;border-radius:11px;border:0;cursor:pointer;' + (light ? 'background:#fff;color:#1f2d5c' : 'background:#1f2d5c;color:#fff');
+    b.addEventListener('click', goRefresh);
+    return b;
+  }
+  function showRefresh() { // non bloquant : des données plus récentes existent
+    if (banner || !document.body) return;
+    banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:56px;z-index:9991;max-width:92vw;background:#1f2d5c;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.3);font:600 14px/1.35 system-ui,-apple-system,sans-serif;display:flex;gap:12px;align-items:center';
+    var t = document.createElement('span'); t.textContent = 'Des données plus récentes viennent d’un autre appareil.';
+    banner.appendChild(t); banner.appendChild(mkButton('Actualiser', true)); document.body.appendChild(banner);
+  }
+  function forceRefresh() { // bloquant : fusion effectuée, la page doit être rechargée avant de continuer
+    if (!document.body || document.getElementById('mb-cloud-block')) return;
+    var o = document.createElement('div'); o.id = 'mb-cloud-block';
+    o.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(10,15,30,.72);display:grid;place-items:center;padding:20px';
+    var c = document.createElement('div');
+    c.style.cssText = 'background:#fff;color:#141b2e;max-width:380px;border-radius:18px;padding:24px;font:16px/1.5 system-ui,-apple-system,sans-serif;display:grid;gap:14px;box-shadow:0 12px 40px rgba(0,0,0,.35)';
+    var h = document.createElement('strong'); h.style.fontSize = '18px'; h.textContent = 'Actualisation nécessaire';
+    var p = document.createElement('span'); p.textContent = 'Un autre appareil a modifié des données en même temps. Vos modifications sont enregistrées et fusionnées ; actualisez pour afficher la version à jour.';
+    c.appendChild(h); c.appendChild(p); c.appendChild(mkButton('Actualiser maintenant', false)); o.appendChild(c); document.body.appendChild(o);
+  }
+
+  /* ---------- Utilitaires de comparaison / fusion ---------- */
+  function fkey(f) { return f.id || ((f.name || '') + '|' + (f.size || '')); }
+  function stripFiles(x) {
+    if (!x || typeof x !== 'object' || !Array.isArray(x.attachedFiles)) return x;
+    var c = Object.assign({}, x);
+    c.attachedFiles = x.attachedFiles.map(function (f) {
+      if (!f || typeof f !== 'object') return f;
+      var g = Object.assign({}, f); delete g.data; delete g.driveId; delete g.driveUrl; return g;
+    });
+    return c;
+  }
+  function norm(x) { return JSON.stringify(Array.isArray(x) ? x.map(stripFiles) : stripFiles(x)); }
+  function isIdArray(a) { return Array.isArray(a) && a.every(function (x) { return x && typeof x === 'object' && x.id != null; }); }
+  function isEmpty(v) { return Array.isArray(v) ? v.length === 0 : (v && typeof v === 'object' ? Object.keys(v).length === 0 : v == null); }
+
+  /* Fusion à trois voies (local / serveur / dernière version synchronisée) */
+  function merge(loc, srv, base) {
+    if (srv === null || srv === undefined) return loc;
+    var hasBase = base !== null && base !== undefined;
+    if (isIdArray(loc) && isIdArray(srv)) {
+      var useBase = hasBase && isIdArray(base), B = {}, S = {}, L = {}, out = [];
+      if (useBase) base.forEach(function (x) { B[x.id] = norm(x); });
+      srv.forEach(function (x) { S[x.id] = x; });
+      loc.forEach(function (x) { L[x.id] = x; });
+      loc.forEach(function (x) {
+        var s = S[x.id];
+        if (!s) { if (useBase && B[x.id] !== undefined) return; out.push(x); return; } // supprimé ailleurs
+        var ln = norm(x);
+        if (ln === norm(s)) out.push(x);
+        else if (useBase && ln === B[x.id]) out.push(s); // seul l'autre appareil l'a modifié
+        else out.push(x);                                // modifié ici : cet appareil l'emporte
+      });
+      srv.forEach(function (s) {
+        if (L[s.id]) return;
+        if (useBase && B[s.id] !== undefined) return;    // supprimé ici
+        out.push(s);                                     // ajouté sur l'autre appareil
+      });
+      return out;
+    }
+    if (hasBase && norm(loc) === norm(base)) return srv;
+    return loc;
+  }
+  /* Les documents lourds restent sur Drive : on conserve en local ceux déjà chargés */
+  function reattach(k, srv, loc) {
+    if (k !== 'patients' || !Array.isArray(srv) || !Array.isArray(loc)) return srv;
+    var datas = {};
+    loc.forEach(function (p) { (p.attachedFiles || []).forEach(function (f) { if (f && f.data) datas[fkey(f)] = f.data; }); });
+    srv.forEach(function (p) { (p.attachedFiles || []).forEach(function (f) { if (f && !f.data && datas[fkey(f)]) f.data = datas[fkey(f)]; }); });
+    return srv;
+  }
+
+  /* ---------- Méta-données locales ---------- */
+  function saveMeta() { return origSet(META_KEY, meta).catch(function () {}); }
+  function loadMeta() {
+    return origGet(META_KEY).then(function (m) {
+      if (m && typeof m === 'object') { meta.revs = m.revs || {}; meta.dirty = m.dirty || {}; meta.files = m.files || {}; }
+    }).catch(function () {});
+  }
+  function getBase(k) { return origGet('__mb_base_' + k).then(function (s) { try { return s ? JSON.parse(s) : undefined; } catch (e) { return undefined; } }).catch(function () { return undefined; }); }
+  function setBase(k, str) { return origSet('__mb_base_' + k, str).catch(function () {}); }
+
+  /* ---------- Réception (Sheet -> appareil) ---------- */
+  function pull() {
+    return call('mbPull', JSON.stringify(meta.revs)).then(function (res) {
+      if (abandoned) { showRefresh(); return; }
+      var changed = res.changed || {}, revs = res.revs || {};
+      return Promise.all(Object.keys(changed).map(function (k) {
+        var srv; try { srv = JSON.parse(changed[k].value); } catch (e) { return null; }
+        return Promise.all([origGet(k), getBase(k)]).then(function (r) {
+          var loc = r[0], base = r[1];
+          meta.revs[k] = changed[k].rev;
+          var result = (meta.dirty[k] && loc !== undefined && loc !== null) ? merge(loc, srv, base) : srv;
+          return origSet(k, reattach(k, result, loc)).then(function () { return setBase(k, changed[k].value); });
+        });
+      })).then(function () {
+        // Données déjà présentes sur cet appareil mais inconnues du Sheet : première migration
+        return Promise.all(KEYS.map(function (k) {
+          if (revs[k] !== undefined) return null;
+          return origGet(k).then(function (v) { if (v !== undefined && v !== null && !isEmpty(v)) meta.dirty[k] = true; });
+        }));
+      }).then(saveMeta);
+    });
+  }
+
+  /* ---------- Envoi (appareil -> Sheet) ---------- */
+  function upload(p, f) {
+    var d = String(f.data);
+    var url = /^data:/.test(d) ? d : 'data:text/plain;charset=utf-8;base64,' + btoa(unescape(encodeURIComponent(d)));
+    return call('mbUploadFile', p.id || '', p.nom || '', f.name || 'document', url).then(function (r) {
+      meta.files[fkey(f)] = { id: r.driveId, url: r.url };
+      return saveMeta();
+    });
+  }
+  function prepare(k, val) {
+    if (k !== 'patients' || !Array.isArray(val)) return Promise.resolve(val);
+    var chain = Promise.resolve();
+    val.forEach(function (p) {
+      (p.attachedFiles || []).forEach(function (f) {
+        if (!f || !f.data || f.driveId || meta.files[fkey(f)]) return;
+        chain = chain.then(function () { return upload(p, f); });
+      });
+    });
+    return chain.then(function () {
+      var copy = JSON.parse(JSON.stringify(val));
+      copy.forEach(function (p) {
+        (p.attachedFiles || []).forEach(function (f) {
+          var m = f && meta.files[fkey(f)];
+          if (m) { f.driveId = m.id; f.driveUrl = m.url; }
+          if (f && f.driveId) delete f.data;
+        });
+      });
+      return copy;
+    });
+  }
+  function doPush(k, attempt) {
+    var v0 = ver[k] || 0;
+    return origGet(k).then(function (val) {
+      if (val === undefined || val === null) { delete meta.dirty[k]; return saveMeta(); }
+      return prepare(k, val).then(function (prepared) {
+        var str = JSON.stringify(prepared);
+        return call('mbPush', k, str, meta.revs[k] || 0).then(function (res) {
+          if (res.status === 'ok') {
+            meta.revs[k] = res.rev;
+            if ((ver[k] || 0) === v0) delete meta.dirty[k];
+            return setBase(k, str).then(saveMeta);
+          }
+          if (attempt >= 3) throw new Error('Conflit de synchronisation persistant');
+          var srv = null; try { srv = JSON.parse(res.value); } catch (e) {}
+          meta.revs[k] = res.rev;
+          return getBase(k).then(function (base) {
+            var merged = reattach(k, merge(val, srv, base), val);
+            var differs = norm(merged) !== norm(val);
+            return origSet(k, merged).then(function () { return setBase(k, res.value); }).then(function () {
+              if (differs) forceRefresh();
+              return doPush(k, attempt + 1);
+            });
+          });
+        });
+      });
+    });
+  }
+  function enqueue(k) {
+    chains[k] = (chains[k] || Promise.resolve()).then(function () { return doPush(k, 0); }).then(function () {
+      if (!Object.keys(meta.dirty).length) setStatus('ok', '☁ Synchronisé');
+    }, function (e) {
+      console.warn('Envoi vers Google impossible :', e);
+      setStatus('warn', '⚠ Hors ligne — enregistré sur cet appareil');
+      clearTimeout(timers[k]);
+      timers[k] = setTimeout(function () { enqueue(k); }, 30000);
+    });
+    return chains[k];
+  }
+  function schedule(k, delay) {
+    clearTimeout(timers[k]);
+    setStatus('wait', '☁ Synchronisation…');
+    timers[k] = setTimeout(function () { enqueue(k); }, delay == null ? 1500 : delay);
+  }
+  function flushDirty() { Object.keys(meta.dirty).forEach(function (k) { if (KEYS.indexOf(k) >= 0) schedule(k, 100); }); }
+
+  /* ---------- Surveillance des changements venant d'un autre appareil ---------- */
+  function checkRemote() {
+    return call('mbRevs').then(function (revs) {
+      var newer = KEYS.some(function (k) { return revs[k] !== undefined && revs[k] !== meta.revs[k] && !meta.dirty[k]; });
+      if (newer) showRefresh();
+      return newer;
+    });
+  }
+  function syncNow() {
+    setStatus('wait', '☁ Synchronisation…');
+    flushDirty();
+    return checkRemote().then(function () {
+      if (!Object.keys(meta.dirty).length) setStatus('ok', '☁ Synchronisé');
+    }, function () { setStatus('warn', '⚠ Hors ligne — données locales'); });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncNow(); });
+  window.addEventListener('online', function () { syncNow(); });
+  setInterval(function () { if (document.visibilityState === 'visible') checkRemote().catch(function () {}); }, 90000);
+
+  /* ---------- Documents (chargés à la demande depuis Drive) ---------- */
+  function fetchFile(f) {
+    return call('mbGetFile', f.driveId).then(function (r) {
+      if (f.isText) { try { f.data = decodeURIComponent(escape(atob(r.b64))); } catch (e) { f.data = atob(r.b64); } }
+      else f.data = 'data:' + (r.mime || f.type || 'application/octet-stream') + ';base64,' + r.b64;
+      return f;
+    });
+  }
+  /* Sauvegarde globale envoyée directement dans le Google Drive du coach */
+  function uploadBackup(name, json, folder) {
+    var url = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
+    var m = String(folder || '').match(/folders\/([\w-]+)|[?&]id=([\w-]+)/), id = m ? (m[1] || m[2]) : String(folder || '').trim();
+    return call('mbUploadFile', 'sauvegardes', 'Sauvegardes MultiBoost', name, url, id);
+  }
+  MB.cloud = { fetchFile: fetchFile, syncNow: syncNow, uploadBackup: uploadBackup };
+
+  /* ---------- Branchement sur le stockage de l'application ---------- */
+  setStatus('wait', '☁ Synchronisation…');
+  var ready = loadMeta().then(function () {
+    return Promise.race([
+      pull(),
+      new Promise(function (resolve, reject) { setTimeout(function () { abandoned = true; reject(new Error('Délai dépassé')); }, 40000); })
+    ]);
+  }).then(function () {
+    setStatus('ok', '☁ Synchronisé'); flushDirty();
+  }).catch(function (e) {
+    console.warn('Synchronisation initiale impossible :', e);
+    setStatus('warn', '⚠ Hors ligne — données locales');
+  });
+
+  MB.store.get = function (k) { return ready.then(function () { return origGet(k); }); };
+  MB.store.set = function (k, v) {
+    return ready.then(function () { return origSet(k, v); }).then(function (r) {
+      if (KEYS.indexOf(k) >= 0) { ver[k] = (ver[k] || 0) + 1; meta.dirty[k] = true; saveMeta(); schedule(k); }
+      return r;
+    });
+  };
+})();
+</script>
 <script id="mb-lock">
 /* ---------- Code d'accès : verrou à l'ouverture du site ---------- */
 var MBLock = (function () {
@@ -7628,6 +7918,7 @@ var MBCoach = (function () {
     });
   }
   function previewFile(f) {
+    if (!f.data && f.driveId && MB.cloud) { MB.ui.toast('Chargement du document depuis Google Drive…', 'info'); MB.cloud.fetchFile(f).then(function () { previewFile(f); }, function () { MB.ui.toast('Document introuvable sur Google Drive.', 'err'); }); return; }
     var body;
     if (f.data && /^data:image\//.test(f.data)) body = '<img class="preview-img" src="' + f.data + '" alt="">';
     else if (f.data && /^data:application\/pdf/.test(f.data)) body = '<iframe class="preview-pdf" src="' + f.data + '" title="Aperçu PDF"></iframe>';
@@ -7637,6 +7928,7 @@ var MBCoach = (function () {
       .then(function (v) { if (v === 'dl') downloadFile(f); });
   }
   function downloadFile(f) {
+    if (f && !f.data && f.driveId && MB.cloud) { MB.ui.toast('Chargement du document depuis Google Drive…', 'info'); MB.cloud.fetchFile(f).then(function () { downloadFile(f); }, function () { MB.ui.toast('Document introuvable sur Google Drive.', 'err'); }); return; }
     if (!f || !f.data) return;
     if (/^data:/.test(f.data)) { var a = document.createElement('a'); a.href = f.data; a.download = f.name || 'document'; document.body.appendChild(a); a.click(); a.remove(); }
     else MB.download(f.name || 'document.txt', f.data, f.type);
@@ -7673,85 +7965,10 @@ var MBCoach = (function () {
     });
   }
   /*
-   * Synchronisation Google Sheets / Drive
-   * Après le déploiement Apps Script, collez ici l'URL se terminant par /exec.
-   * L'application conserve aussi ses données localement si la synchronisation échoue.
+   * Synchronisation Google Sheets / Drive : désormais automatique et complète (module MBCloud,
+   * plus haut). Chaque enregistrement est envoyé au Google Sheet privé, depuis n'importe quel appareil.
    */
-  function postToMultiBoost(payload, settings) {
-    var endpoint = String((settings && settings.googleAppsScriptUrl) || '').trim();
-    if (!endpoint || endpoint.indexOf('https://script.google.com/macros/s/') !== 0 || endpoint.indexOf('/exec') === -1) {
-      return Promise.reject(new Error('URL Apps Script non configurée dans Paramètres'));
-    }
-    payload.driveFolderId = String((settings && settings.googleDriveFolderId) || '').trim();
-    payload.notificationEmail = String((settings && settings.notificationEmail) || '').trim();
-    // En mode no-cors, le navigateur ne permet pas de lire la réponse : l’envoi n’est pas confirmé.
-    return fetch(endpoint, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify(payload)
-    });
-  }
-
-  function syncClientToGoogleSheets(client, isNew) {
-    // Les réglages sont ceux saisis dans Paramètres et enregistrés dans le stockage local.
-    MB.store.get('settings').then(function (savedSettings) {
-      var settings = Object.assign({}, MB.DEFAULT_SETTINGS || {}, savedSettings || {});
-      if (!String(settings.googleAppsScriptUrl || '').trim()) return;
-      var files = (client.attachedFiles || []).filter(function (f) {
-        return f && !f.googleDriveSyncAttempted && typeof f.data === 'string' && f.data.indexOf('data:') === 0;
-      });
-      var uploaded = [];
-      var chain = Promise.resolve();
-      // Envoyer les fichiers un par un pour éviter une requête trop volumineuse.
-      files.forEach(function (f) {
-        chain = chain.then(function () {
-          return postToMultiBoost({
-            action: 'file',
-            clientId: client.id || '',
-            nomClient: client.nom || '',
-            nomFichier: f.name || 'document',
-            fichierBase64: f.data
-          }, settings).then(function () {
-            // En no-cors, on sait seulement que la requête a été lancée, pas qu'elle a réussi.
-            f.googleDriveSyncAttempted = true;
-            uploaded.push({ nom: f.name || 'document', type: f.type || '', taille: f.size || '' });
-          });
-        });
-      });
-      chain = chain.then(function () {
-        return postToMultiBoost({
-          action: 'client',
-          isNew: !!isNew,
-          id: client.id || '',
-          nom: client.nom || '',
-          sexe: client.sexe || '',
-          age: client.age || '',
-          poids: client.poids || '',
-          tel: client.tel || '',
-          email: client.email || '',
-          consentement: !!client.consent,
-          formule: (client.pack && client.pack.name) || '',
-          debut: (client.pack && client.pack.start) || '',
-          paye: !!(client.pack && client.pack.paid),
-          objectif: client.objectif || '',
-          evictions: client.evictions || '',
-          sante: client.medical || '',
-          materiel: client.materiel || '',
-          notes: client.notes || '',
-          fichiers: uploaded
-        }, settings);
-      });
-      chain.catch(function (err) {
-        console.warn('Synchronisation Multi Boost vers Google Sheets non confirmée :', err);
-        if (window.MB && MB.ui && MB.ui.toast) {
-          MB.ui.toast('Dossier enregistré localement, mais synchronisation Google non confirmée.', 'warn');
-        }
-      });
-    }).catch(function (err) {
-      console.warn('Lecture des paramètres Google impossible :', err);
-    });
-  }
+  function syncClientToGoogleSheets() { /* géré par MBCloud via MB.store */ }
 
   function submitClient(e) {
     e.preventDefault();
@@ -7956,6 +8173,7 @@ var MBCoach = (function () {
     if (!card) {
       card = MB.h('<div class="diff-card" style="margin:10px 0;padding:12px 14px;border:1px solid var(--line,#d6dce8);border-radius:14px;background:var(--surface,#fff);display:grid;gap:6px">' +
         '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>Difficulté du plan</strong><span data-role="diff-label" style="font-weight:600"></span></div>' +
+        '<label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px"><strong>Appliquer à partir de la séance</strong><select data-role="diff-from" aria-label="Appliquer la difficulté à partir de la séance" style="flex:1;min-width:160px;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#d6dce8);font:inherit"></select></label>' +
         '<input type="range" min="1" max="9" step="1" data-role="diff-range" aria-label="Difficulté du plan" style="width:100%">' +
         '<div style="display:flex;justify-content:space-between;font-size:12px;opacity:.7"><span>Récupération</span><span>Standard</span><span>Maximal</span></div>' +
         '<div data-role="diff-note" style="font-size:13px;opacity:.85"></div>' +
@@ -7969,16 +8187,27 @@ var MBCoach = (function () {
       try { hydrateIcons(card); } catch (e) {}
       $('[data-role=suivi-file]', card).addEventListener('change', function (e) { if (e.target.files[0]) importSuivi(e.target.files[0]); e.target.value = ''; });
       bar.parentNode.insertBefore(card, bar.nextSibling);
-      var rg = $('[data-role=diff-range]', card);
+      var rg = $('[data-role=diff-range]', card), fr = $('[data-role=diff-from]', card);
       rg.addEventListener('input', function () { $('[data-role=diff-label]', card).textContent = MB.DIFF_LABELS[+rg.value]; $('[data-role=diff-note]', card).textContent = MB.diffSummary(+rg.value); });
+      /* Changer la séance de départ : la jauge affiche le niveau actuel de cette séance */
+      fr.addEventListener('change', function () {
+        var c = S.ctx[ctxName]; if (!c || !c.prog) return;
+        var i = Math.max(0, +fr.value || 0), sx = c.prog.sessions[i], lv2 = sx ? MB.diffLevelFor(c.prog, sx.id) : MB.diffLevel(c.prog);
+        rg.value = lv2; $('[data-role=diff-label]', card).textContent = MB.DIFF_LABELS[lv2]; $('[data-role=diff-note]', card).textContent = MB.diffSummary(lv2);
+      });
       rg.addEventListener('change', function () {
         var c = S.ctx[ctxName]; if (!c || !c.prog) return;
-        MB.applyDifficulty(c.prog, +rg.value); commit(ctxName); renderProgram(ctxName);
-        MB.ui.toast('Plan adapté : ' + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
+        var from = Math.max(0, Math.min(+fr.value || 0, c.prog.sessions.length - 1)), sx = c.prog.sessions[from];
+        MB.applyDifficulty(c.prog, +rg.value, from); commit(ctxName); renderProgram(ctxName);
+        MB.ui.toast((from > 0 ? 'Séances ' + sx.id + ' à ' + c.prog.sessions[c.prog.sessions.length - 1].id + ' adaptées : ' : 'Plan adapté : ') + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
       });
     }
     card.hidden = !has.training;
-    var lv = MB.diffLevel(prog), r2 = $('[data-role=diff-range]', card);
+    var fsel = $('[data-role=diff-from]', card), keep = Math.max(0, +fsel.value || 0);
+    fsel.innerHTML = '';
+    prog.sessions.forEach(function (s2, i2) { fsel.add(new Option(i2 === 0 ? 'Séance ' + s2.id + ' (tout le plan)' : 'Séance ' + s2.id + ' · ' + s2.day, i2)); });
+    fsel.value = Math.min(keep, Math.max(0, prog.sessions.length - 1));
+    var fs0 = prog.sessions[+fsel.value], lv = fs0 ? MB.diffLevelFor(prog, fs0.id) : MB.diffLevel(prog), r2 = $('[data-role=diff-range]', card);
     r2.value = lv; $('[data-role=diff-label]', card).textContent = MB.DIFF_LABELS[lv];
     var lt = MB.diffLevelsText(prog);
     $('[data-role=diff-note]', card).textContent = MB.diffSummary(lv) + (lt ? ' · Niveaux actuels : ' + lt + '.' : '');
@@ -8204,6 +8433,14 @@ var MBCoach = (function () {
     var backup = Object.assign({ app: 'Multi Boost', version: '4.1', exportDate: new Date().toISOString(), patients: S.patients, library: S.library, customOptions: S.customOptions }, window.MBCRM ? MBCRM.exportData() : {});
     var name = 'Sauvegarde_MultiBoost_' + MB.today().replace(/\//g, '-') + '.json', json = JSON.stringify(backup, null, 1);
     var done = function (shared) { markBackup(); MB.ui.toast(shared ? 'Sauvegarde envoyée vers l’application choisie.' : 'Sauvegarde téléchargée (dossiers, documents et protocoles).'); };
+    // Application ouverte depuis Google (Apps Script) : envoi direct sur le Drive, puis repli habituel si ça échoue
+    if (window.MB && MB.cloud && MB.cloud.uploadBackup) {
+      MB.ui.toast('Envoi de la sauvegarde sur Google Drive…', 'info');
+      MB.cloud.uploadBackup(name, json, (window.MBCRM && MBCRM.settings() || {}).backupDriveFolder).then(function () { markBackup(); MB.ui.toast('Sauvegarde envoyée sur votre Google Drive.'); }, function () { MB.ui.toast('Envoi sur Drive impossible : sauvegarde classique à la place.', 'warn'); exportLocal(); });
+      return;
+    }
+    exportLocal();
+    function exportLocal() {
     // Téléphone / tablette : feuille de partage (Drive, iCloud, OneDrive, e-mail, WhatsApp…) ; sinon téléchargement classique
     try {
       var file = new File([json], name, { type: 'application/json' });
@@ -8216,6 +8453,7 @@ var MBCoach = (function () {
       }
     } catch (e) { /* repli téléchargement */ }
     MB.download(name, json, 'application/json'); done(false);
+    }
   }
   function markBackup() { try { localStorage.setItem('mb-last-backup', new Date().toISOString()); } catch (e) {} backupNote(); }
   function backupAge() {
@@ -8867,7 +9105,7 @@ var MBCRM = (function () {
     function ta(id, label, val, rows) { return '<label class="field" for="st-' + id + '"><span class="field-label">' + label + '</span><textarea id="st-' + id + '" rows="' + (rows || 3) + '">' + esc(val || '') + '</textarea></label>'; }
     f.innerHTML =
       '<section class="panel stack"><h2 class="panel-title">Coach</h2><div class="grid-2">' + inp('coachName', 'Prénom affiché', s.coachName) + inp('city', 'Ville ou région', s.city) + inp('phone', 'Téléphone WhatsApp', s.phone, 'tel', '06 12 34 56 78') + inp('email', 'E-mail affiché aux clients', s.email, 'email', 'coach@exemple.fr') + inp('instagram', 'Instagram (facultatif)', s.instagram, 'text', '@multiboost') + inp('offerUrl', 'Adresse de la page de vente en ligne', s.offerUrl, 'url', 'https://…') + '</div></section>' +
-      '<section class="panel stack" id="st-google-connect"><h2 class="panel-title">Connexion Google · Drive et Sheets</h2><p class="muted">Ces réglages sont enregistrés dans ce navigateur. Collez l’URL de votre application Web Apps Script et l’ID ou le lien du dossier Drive où stocker les documents.</p><div class="grid-2">' + inp('notificationEmail', 'Adresse e-mail pour les alertes', s.notificationEmail, 'email', 'vous@exemple.fr') + inp('googleDriveFolderId', 'ID ou lien du dossier Google Drive', s.googleDriveFolderId, 'text', 'ID du dossier ou URL Drive') + inp('googleAppsScriptUrl', 'URL de l’application Web Apps Script', s.googleAppsScriptUrl, 'url', 'https://script.google.com/macros/s/…/exec') + '</div><p class="muted">Une alerte e-mail peut être envoyée lors de la création d’un nouveau dossier. Les données du client restent dans le tableur ; l’e-mail ne contient que son nom et un rappel de consulter la base.</p></section>' +
+      '<section class="panel stack" id="st-google-connect"><h2 class="panel-title">Connexion Google · Drive et Sheets</h2><p class="muted">Tout est synchronisé automatiquement avec votre Google Sheet privé, sur tous vos appareils (ouvrez toujours l’adresse Apps Script). Facultatif : un dossier Drive de votre choix pour les documents (sinon il est créé tout seul) et une adresse e-mail pour l’alerte « nouveau client ».</p><div class="grid-2">' + inp('notificationEmail', 'Adresse e-mail pour les alertes', s.notificationEmail, 'email', 'vous@exemple.fr') + inp('googleDriveFolderId', 'ID ou lien du dossier Google Drive', s.googleDriveFolderId, 'text', 'ID du dossier ou URL Drive') + inp('backupDriveFolder', 'Dossier Drive des sauvegardes (ID ou lien)', s.backupDriveFolder, 'text', 'Vide = dossier par défaut') + inp('googleAppsScriptUrl', 'URL Apps Script (facultatif, non utilisée en mode privé)', s.googleAppsScriptUrl, 'url', 'https://script.google.com/macros/s/…/exec') + '</div><p class="muted">Une alerte e-mail peut être envoyée lors de la création d’un nouveau dossier. Les données du client restent dans votre Google Sheet (onglet « Fiches clients ») ; l’e-mail ne contient que son nom.</p></section>' +
       '<section class="panel stack"><h2 class="panel-title">Page de vente</h2>' + inp('heroTitle', 'Grand titre (mettez *des mots entre étoiles* pour les passer en or)', s.heroTitle) + inp('offerTitle', 'Sous-titre', s.offerTitle) + ta('offerIntro', 'Introduction', s.offerIntro, 3) + ta('bio', 'Présentation du coach', s.bio, 4) + '</section>' +
       '<section class="panel stack"><div class="panel-head" style="margin:0"><h2 class="panel-title">Avis clients</h2><button type="button" class="btn btn-ghost btn-sm" data-add="t">' + icon('plus') + '<span>Ajouter un avis</span></button></div><p class="muted">Uniquement de vrais avis, recopiés avec l’accord de la personne. Un avis sans la case cochée ne s’affiche pas sur la page.</p><div class="pairs" data-list="t">' + pairRows(s.testimonials, 't') + '</div></section>' +
       '<section class="panel stack"><div class="panel-head" style="margin:0"><h2 class="panel-title">Questions fréquentes</h2><button type="button" class="btn btn-ghost btn-sm" data-add="faq">' + icon('plus') + '<span>Ajouter une question</span></button></div><div class="pairs" data-list="faq">' + pairRows(s.faq, 'faq') + '</div></section>' +
@@ -8883,7 +9121,7 @@ var MBCRM = (function () {
   function collectSettings() {
     var s = C.settings, f = $('#settings-form');
     function v(id) { var el = $('#st-' + id, f); return el ? el.value.trim() : ''; }
-    ['coachName', 'city', 'phone', 'email', 'instagram', 'offerUrl', 'heroTitle', 'offerTitle', 'offerIntro', 'bio', 'notificationEmail', 'googleDriveFolderId', 'googleAppsScriptUrl'].forEach(function (k) { s[k] = v(k); });
+    ['coachName', 'city', 'phone', 'email', 'instagram', 'offerUrl', 'heroTitle', 'offerTitle', 'offerIntro', 'bio', 'notificationEmail', 'googleDriveFolderId', 'backupDriveFolder', 'googleAppsScriptUrl'].forEach(function (k) { s[k] = v(k); });
     ['weeklyDays', 'inactiveDays', 'endSoonDays', 'leadFollowDays'].forEach(function (k) { s.rules[k] = Math.max(1, Number(v(k)) || MB.DEFAULT_SETTINGS.rules[k]); });
     function pairs(kind) { return $$('[data-list="' + kind + '"] .pair-row', f).map(function (row) { var o = {}; $$('[data-k]', row).forEach(function (el) { o[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim(); }); return o; }); }
     s.faq = pairs('faq').filter(function (x) { return x.q; });
