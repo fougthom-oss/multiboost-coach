@@ -257,6 +257,10 @@ body.app { height: 100%; }
 @media (max-width: 640px) { .board:not(.show-anim) .ex-card { grid-template-columns: auto minmax(0, 1fr); } .board:not(.show-anim) .ex-actions { grid-column: 1 / -1; justify-content: flex-start; } .board:not(.show-anim) .board-grid { padding: 12px; } }
 .mb3d-fallback { display: grid; place-items: center; height: 100%; padding: 16px; text-align: center; color: var(--ink-3); font-size: 13px; }
 
+.board-warmup { padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--line); border-left: 4px solid var(--amber); display: grid; gap: 4px; }
+.board-warmup-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.board-warmup h4 { font-size: 14.5px; }
+.board-warmup p { font-size: 14px; color: var(--ink-2); margin: 0; }
 .volets { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .volet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; border-top: 3px solid var(--amber); }
 .volet-1 { border-top-color: var(--ok); }
@@ -1013,7 +1017,6 @@ a.crm-line:hover { color: var(--petrol); }
               <button type="button" class="btn btn-ghost btn-toggle" data-action="toggle-done"><i data-ic="check"></i><span>Marquer comme faite</span></button>
               <button type="button" class="btn btn-ghost" data-action="add-ex"><i data-ic="plus"></i><span>Exercice</span></button>
             </div>
-            <div class="volets" data-role="volets-pre"></div>
             <div data-role="board"></div>
             <div data-role="timer"></div>
             <div class="volets" data-role="volets"></div>
@@ -1105,7 +1108,6 @@ a.crm-line:hover { color: var(--petrol); }
               <button type="button" class="icon-btn" data-action="next" aria-label="Séance suivante"><i data-ic="next"></i></button>
               <button type="button" class="btn btn-ghost" data-action="add-ex"><i data-ic="plus"></i><span>Exercice</span></button>
             </div>
-            <div class="volets" data-role="volets-pre"></div>
             <div data-role="board"></div>
             <div data-role="timer"></div>
             <div class="volets" data-role="volets"></div>
@@ -1247,7 +1249,6 @@ a.crm-line:hover { color: var(--petrol); }
       <button type="button" class="icon-btn" data-act="next" aria-label="Séance suivante"><i data-ic="next"></i></button>
       <button type="button" class="btn btn-ghost btn-toggle" data-act="done"><i data-ic="check"></i><span>Marquer comme faite</span></button>
     </div>
-    <div class="volets" id="volets-pre"></div>
     <div id="board-host"></div>
     <div id="timer-host"></div>
     <div class="volets" id="volets-host"></div>
@@ -4432,11 +4433,15 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
     '<header class="board-head"><div class="board-week"><span class="board-kicker">Séance ' + MB.esc(s.id) + ' · ' + MB.esc(s.day) + '</span><span class="board-week-title" data-f="leftHeader"' + ce + '></span></div>' +
     '<div class="board-rules" data-f="rightHeader"' + ce + '></div></header>' +
     '<div class="board-banner" data-f="centerBanner"' + ce + '></div>' +
+    '<div class="board-warmup"><div class="board-warmup-head"><h4>Échauffement articulaire</h4><span class="volet-time">10 min</span></div><p data-f="warmup" data-placeholder="Décrivez l’échauffement de cette séance"' + ce + '></p></div>' +
     '<div class="coach-note' + (s.coachNote ? '' : ' is-empty') + '"><span class="coach-note-ic">' + MB.icon('info') + '</span><div><strong>Conseil du coach</strong><p data-f="coachNote" data-placeholder="Ajoutez un conseil pour cette séance (ressenti, consigne, encouragement)…"' + ce + '></p></div></div>' +
     '<div class="board-grid"></div></section>');
   MB.$('[data-f=leftHeader]', el).textContent = s.leftHeader || '';
   MB.$('[data-f=centerBanner]', el).textContent = s.centerBanner || '';
   MB.$('[data-f=coachNote]', el).textContent = s.coachNote || '';
+  var wu = MB.$('[data-f=warmup]', el); wu.textContent = s.warmup || '';
+  if (opts.editable) wu.addEventListener('input', function () { s.warmup = wu.innerText.trim(); opts.onChange && opts.onChange(); });
+  else if (!s.warmup) MB.$('.board-warmup', el).hidden = true;
   var rules = MB.$('[data-f=rightHeader]', el);
   if (opts.editable) rules.innerText = lines.join('\n');
   else lines.forEach(function (l) { var sp = document.createElement('span'); sp.textContent = l; rules.appendChild(sp); });
@@ -6386,7 +6391,6 @@ var MBClient = (function () {
     var s = prog.sessions[idx];
     MB.board.render($('#board-host'), prog, idx, { editable: coachOn, onChange: changed,
       onDelete: function (i) { MB.ui.confirm('Retirer « ' + s.exercises[i].title + ' » de la séance ?', 'Retirer', true).then(function (ok) { if (!ok) return; s.exercises.splice(i, 1); changed(); renderDay(); }); } });
-    MB.board.volets($('#volets-pre'), s, coachOn, changed, ['warmup']);
     MB.board.volets($('#volets-host'), s, coachOn, changed, ['finisher', 'cooldown']);
     renderFeedback(s);
     var d = st.completed.indexOf(s.id) !== -1, tb = $('[data-act=done]');
@@ -8244,7 +8248,6 @@ var MBCoach = (function () {
     var c = S.ctx[ctxName], root = $('#program-' + ctxName), s = c.prog.sessions[c.idx];
     MB.board.render($('[data-role=board]', root), c.prog, c.idx, { editable: true, onChange: function () { commit(ctxName); refreshSelect(ctxName); },
       onDelete: function (i) { MB.ui.confirm('Retirer « ' + s.exercises[i].title + ' » de la séance ?', 'Retirer', true).then(function (ok) { if (!ok) return; s.exercises.splice(i, 1); commit(ctxName); renderDay(ctxName); }); } });
-    var vpre = $('[data-role=volets-pre]', root); if (vpre) MB.board.volets(vpre, s, true, function () { commit(ctxName); }, ['warmup']);
     MB.board.volets($('[data-role=volets]', root), s, true, function () { commit(ctxName); }, ['finisher', 'cooldown']);
     var tb = $('[data-action=toggle-done]', root);
     if (tb) { var d = c.done.indexOf(s.id) !== -1; tb.className = 'btn btn-toggle ' + (d ? 'btn-primary' : 'btn-ghost'); tb.innerHTML = icon('check') + '<span>' + (d ? 'Séance faite' : 'Marquer comme faite') + '</span>'; }
