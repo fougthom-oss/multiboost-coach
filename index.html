@@ -261,6 +261,13 @@ body.app { height: 100%; }
 .board-warmup-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .board-warmup h4 { font-size: 14.5px; }
 .board-warmup p { font-size: 14px; color: var(--ink-2); margin: 0; }
+.volet-tools { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.apply-all { min-height: 28px; padding: 3px 9px; font-size: 12px; border-radius: 7px; }
+.apply-all .ic { width: 14px; height: 14px; }
+.coach-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.title-edit { border-radius: 6px; cursor: text; outline: none; padding: 1px 5px; margin: -1px -5px; transition: background .15s, box-shadow .15s; }
+.title-edit:hover { box-shadow: inset 0 -1px 0 var(--line); }
+.title-edit:focus { background: var(--surface); box-shadow: 0 0 0 2px var(--amber); }
 .volets { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .volet { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; border-top: 3px solid var(--amber); }
 .volet-1 { border-top-color: var(--ok); }
@@ -4431,6 +4438,93 @@ MB.store = (function () {
 
 /* ---------- Planche d'entraînement ---------- */
 MB.board = {};
+/* ---------- Titres des encarts : modifiables + « Appliquer partout » ---------- */
+MB.board.BOXES = [
+  { key: 'warmup', def: 'Échauffement articulaire', short: 'Échauffement' },
+  { key: 'finisher', def: 'Finisher hypopressif & périnée', short: 'Finisher' },
+  { key: 'cooldown', def: 'Retour au calme & posture', short: 'Retour au calme' },
+  { key: 'coachNote', def: 'Conseil du coach', short: 'Conseil du coach' }
+];
+MB.board.boxOf = function (key) { return MB.board.BOXES.filter(function (b) { return b.key === key; })[0]; };
+MB.board.title = function (s, key, short) {
+  var b = MB.board.boxOf(key), t = s && s.titles && s.titles[key];
+  return t || (short ? b.short : b.def);
+};
+MB.board.setTitle = function (s, key, val) {
+  val = String(val || '').replace(/\s+/g, ' ').trim();
+  s.titles = s.titles || {};
+  if (val && val !== MB.board.boxOf(key).def) s.titles[key] = val; else delete s.titles[key];
+};
+MB.board.bindTitle = function (el, s, key, onChange) {
+  el.classList.add('title-edit');
+  el.contentEditable = 'true'; el.spellcheck = false;
+  el.title = 'Cliquer pour renommer cet encart';
+  el.addEventListener('input', function () { MB.board.setTitle(s, key, el.innerText); onChange && onChange(); });
+  el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  el.addEventListener('paste', function (e) {
+    e.preventDefault();
+    var t = ((e.clipboardData || window.clipboardData).getData('text') || '').replace(/\s+/g, ' ');
+    document.execCommand('insertText', false, t);
+  });
+  el.addEventListener('blur', function () { el.textContent = MB.board.title(s, key); });
+};
+MB.board.decorate = function (head, titleEl, s, key, prog, o) {
+  titleEl.textContent = MB.board.title(s, key);
+  if (!o.editable || !s) return;
+  MB.board.bindTitle(titleEl, s, key, o.onChange);
+  if (!prog) return;
+  var tools = MB.h('<span class="volet-tools"></span>');
+  var time = MB.$('.volet-time', head); if (time) tools.appendChild(time);
+  var btn = MB.h('<button type="button" class="btn btn-ghost btn-sm apply-all coach-only" title="Copier cet encart (titre et/ou texte) dans toutes les séances">' + MB.icon('copy') + '<span>Appliquer partout</span></button>');
+  btn.addEventListener('click', function () { MB.board.applyAll(prog, s, key, o.onChange); });
+  tools.appendChild(btn); head.appendChild(tools);
+};
+MB.board.applyAll = function (prog, s, fromKey, onChange) {
+  var n = (prog.sessions || []).length;
+  var body = '<p class="lede">Choisissez les encarts à recopier dans les <b>' + n + ' séances</b> du programme (à partir de la séance ' + MB.esc(s.id) + ').</p>' +
+    '<div class="stack" data-boxes></div>' +
+    '<p class="field-label" style="margin-top:14px">Que faut-il appliquer ?</p>' +
+    '<div class="stack"><label class="check-line"><input type="checkbox" data-what="title" checked><span>Le titre de l’encart</span></label>' +
+    '<label class="check-line"><input type="checkbox" data-what="text"><span>Le texte de l’encart (remplace celui de chaque séance)</span></label></div>';
+  return MB.ui.modal({ title: 'Appliquer à toutes les séances', body: body, className: 'modal-small',
+    onOpen: function (d) {
+      var host = MB.$('[data-boxes]', d);
+      MB.board.BOXES.forEach(function (b) {
+        var l = MB.h('<label class="check-line"><input type="checkbox"><span></span></label>');
+        MB.$('input', l).dataset.box = b.key; MB.$('input', l).checked = b.key === fromKey;
+        MB.$('span', l).textContent = MB.board.title(s, b.key);
+        host.appendChild(l);
+      });
+    },
+    validate: function (d) {
+      if (!MB.$$('[data-box]', d).some(function (i) { return i.checked; })) return 'Cochez au moins un encart.';
+      if (!MB.$$('[data-what]', d).some(function (i) { return i.checked; })) return 'Cochez le titre et/ou le texte.';
+      return null;
+    },
+    collect: function (d) {
+      return {
+        keys: MB.$$('[data-box]', d).filter(function (i) { return i.checked; }).map(function (i) { return i.dataset.box; }),
+        title: MB.$('[data-what=title]', d).checked, text: MB.$('[data-what=text]', d).checked
+      };
+    },
+    actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Appliquer partout', value: 'ok', kind: 'btn-primary' }]
+  }).then(function (r) {
+    if (!r || !r.keys) return false;
+    (prog.sessions || []).forEach(function (x) {
+      r.keys.forEach(function (k) {
+        if (r.title) {
+          x.titles = x.titles || {};
+          if (s.titles && s.titles[k]) x.titles[k] = s.titles[k]; else delete x.titles[k];
+        }
+        if (r.text && x !== s) x[k] = s[k] || '';
+      });
+    });
+    onChange && onChange();
+    MB.ui.toast('Appliqué aux ' + n + ' séances.');
+    return true;
+  });
+};
+
 MB.board.render = function (host, prog, sessionIdx, opts) {
   // opts: { editable, onChange(field, value, exIdx), onDelete(exIdx), onDemo(type, title) }
   opts = opts || {};
@@ -4443,12 +4537,15 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
     '<header class="board-head"><div class="board-week"><span class="board-kicker">Séance ' + MB.esc(s.id) + ' · ' + MB.esc(s.day) + '</span><span class="board-week-title" data-f="leftHeader"' + ce + '></span></div>' +
     '<div class="board-rules" data-f="rightHeader"' + ce + '></div></header>' +
     '<div class="board-banner" data-f="centerBanner"' + ce + '></div>' +
-    '<div class="board-warmup"><div class="board-warmup-head"><h4>Échauffement articulaire</h4><span class="volet-time">10 min</span></div><p data-f="warmup" data-placeholder="Décrivez l’échauffement de cette séance"' + ce + '></p></div>' +
-    '<div class="coach-note' + (s.coachNote ? '' : ' is-empty') + '"><span class="coach-note-ic">' + MB.icon('info') + '</span><div><strong>Conseil du coach</strong><p data-f="coachNote" data-placeholder="Ajoutez un conseil pour cette séance (ressenti, consigne, encouragement)…"' + ce + '></p></div></div>' +
+    '<div class="board-warmup"><div class="board-warmup-head"><h4></h4><span class="volet-time">10 min</span></div><p data-f="warmup" data-placeholder="Décrivez l’échauffement de cette séance"' + ce + '></p></div>' +
+    '<div class="coach-note' + (s.coachNote ? '' : ' is-empty') + '"><span class="coach-note-ic">' + MB.icon('info') + '</span><div><div class="coach-note-head"><strong></strong></div><p data-f="coachNote" data-placeholder="Ajoutez un conseil pour cette séance (ressenti, consigne, encouragement)…"' + ce + '></p></div></div>' +
     '<div class="board-grid"></div></section>');
   MB.$('[data-f=leftHeader]', el).textContent = s.leftHeader || '';
   MB.$('[data-f=centerBanner]', el).textContent = s.centerBanner || '';
   MB.$('[data-f=coachNote]', el).textContent = s.coachNote || '';
+  var ttlOpts = { editable: !!opts.editable, onChange: opts.onChange };
+  MB.board.decorate(MB.$('.board-warmup-head', el), MB.$('.board-warmup-head h4', el), s, 'warmup', prog, ttlOpts);
+  MB.board.decorate(MB.$('.coach-note-head', el), MB.$('.coach-note-head strong', el), s, 'coachNote', prog, ttlOpts);
   var wu = MB.$('[data-f=warmup]', el); wu.textContent = s.warmup || '';
   if (opts.editable) wu.addEventListener('input', function () { s.warmup = wu.innerText.trim(); opts.onChange && opts.onChange(); });
   else if (!s.warmup) MB.$('.board-warmup', el).hidden = true;
@@ -4516,13 +4613,14 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
   host.appendChild(el);
 };
 
-MB.board.volets = function (host, s, editable, onChange, only) {
+MB.board.volets = function (host, s, editable, onChange, only, prog) {
   host.innerHTML = '';
   var ce = editable ? ' contenteditable="true" spellcheck="false"' : '';
   [['warmup', 'Échauffement articulaire', '10 min'], ['finisher', 'Finisher hypopressif & périnée', '5 min'], ['cooldown', 'Retour au calme & posture', '5 min']].forEach(function (v, i) {
     if (only && only.indexOf(v[0]) === -1) return;
     var box = MB.h('<div class="volet volet-' + i + '"><div class="volet-head"><h4></h4><span class="volet-time"></span></div><p' + ce + '></p></div>');
-    MB.$('h4', box).textContent = v[1]; MB.$('.volet-time', box).textContent = v[2];
+    MB.$('.volet-time', box).textContent = v[2];
+    MB.board.decorate(MB.$('.volet-head', box), MB.$('h4', box), s, v[0], prog, { editable: editable, onChange: onChange });
     var p = MB.$('p', box); p.textContent = (s && s[v[0]]) || '';
     if (editable) p.addEventListener('input', function () { s[v[0]] = p.innerText.trim(); onChange && onChange(); });
     host.appendChild(box);
@@ -4972,12 +5070,12 @@ MB.printProgram = function (prog, opts) {
       return '<figure class="pr-ex"><div class="pr-ex-img">' + (img ? '<img src="' + img + '" alt="">' : '<span>' + e(info.name || '') + '</span>') + '<b>' + (i + 1) + '</b></div>' +
         '<figcaption><strong>' + e(x.title) + '</strong><span>' + e(MB.exSub(s, x)) + '</span>' + (info.cues ? '<em>' + e(info.cues) + '</em>' : '') + '</figcaption></figure>';
     }).join('');
-    var volets = [['Échauffement', s.warmup], ['Finisher', s.finisher], ['Retour au calme', s.cooldown]].filter(function (v) { return v[1]; })
-      .map(function (v) { return '<div><h4>' + v[0] + '</h4><p>' + e(v[1]) + '</p></div>'; }).join('');
+    var volets = [[MB.board.title(s, 'warmup', true), s.warmup], [MB.board.title(s, 'finisher', true), s.finisher], [MB.board.title(s, 'cooldown', true), s.cooldown]].filter(function (v) { return v[1]; })
+      .map(function (v) { return '<div><h4>' + e(v[0]) + '</h4><p>' + e(v[1]) + '</p></div>'; }).join('');
     return '<section class="pr-page">' + miniHead('Séance ' + s.id + ' · ' + s.day) +
       '<div class="pr-band"><div class="pr-band-week"><span>Séance ' + e(s.id) + ' · ' + e(s.day) + '</span><strong>' + e(s.leftHeader) + '</strong></div><ul class="pr-band-rules">' + rules + '</ul></div>' +
       '<div class="pr-banner">' + e(s.centerBanner) + '</div>' +
-      (s.coachNote ? '<div class="pr-note"><strong>Conseil du coach</strong><p>' + e(s.coachNote) + '</p></div>' : '') +
+      (s.coachNote ? '<div class="pr-note"><strong>' + e(MB.board.title(s, 'coachNote')) + '</strong><p>' + e(s.coachNote) + '</p></div>' : '') +
       '<div class="pr-grid">' + ex + '</div>' +
       (volets ? '<div class="pr-volets">' + volets + '</div>' : '') +
       '<footer class="pr-foot"><span>' + e(MB.BRAND.name) + ' · ' + e(MB.BRAND.tagline) + '</span><span class="pr-check">☐ Séance faite le ……… / ……… / ………</span></footer></section>';
@@ -6402,7 +6500,7 @@ var MBClient = (function () {
     var s = prog.sessions[idx];
     MB.board.render($('#board-host'), prog, idx, { editable: coachOn, onChange: changed,
       onDelete: function (i) { MB.ui.confirm('Retirer « ' + s.exercises[i].title + ' » de la séance ?', 'Retirer', true).then(function (ok) { if (!ok) return; s.exercises.splice(i, 1); changed(); renderDay(); }); } });
-    MB.board.volets($('#volets-host'), s, coachOn, changed, ['finisher', 'cooldown']);
+    MB.board.volets($('#volets-host'), s, coachOn, changed, ['finisher', 'cooldown'], prog);
     renderFeedback(s);
     var d = st.completed.indexOf(s.id) !== -1, tb = $('[data-act=done]');
     tb.className = 'btn btn-toggle ' + (d ? 'btn-primary' : 'btn-ghost');
@@ -8271,7 +8369,7 @@ var MBCoach = (function () {
     var c = S.ctx[ctxName], root = $('#program-' + ctxName), s = c.prog.sessions[c.idx];
     MB.board.render($('[data-role=board]', root), c.prog, c.idx, { editable: true, onChange: function () { commit(ctxName); refreshSelect(ctxName); },
       onDelete: function (i) { MB.ui.confirm('Retirer « ' + s.exercises[i].title + ' » de la séance ?', 'Retirer', true).then(function (ok) { if (!ok) return; s.exercises.splice(i, 1); commit(ctxName); renderDay(ctxName); }); } });
-    MB.board.volets($('[data-role=volets]', root), s, true, function () { commit(ctxName); }, ['finisher', 'cooldown']);
+    MB.board.volets($('[data-role=volets]', root), s, true, function () { commit(ctxName); }, ['finisher', 'cooldown'], c.prog);
     var tb = $('[data-action=toggle-done]', root);
     if (tb) { var d = c.done.indexOf(s.id) !== -1; tb.className = 'btn btn-toggle ' + (d ? 'btn-primary' : 'btn-ghost'); tb.innerHTML = icon('check') + '<span>' + (d ? 'Séance faite' : 'Marquer comme faite') + '</span>'; }
   }
