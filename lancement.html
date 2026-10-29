@@ -23,12 +23,22 @@
 </main>
 <script>
   /* ⬇️ COLLEZ ICI L'URL DE VOTRE APPLICATION (celle qui se termine par /exec) ⬇️ */
-  var URL_APP = 'https://script.google.com/macros/s/AKfycbywpt_6vpo8QPYh39kyLKEv80PoQGokQmvvircp2yx2lxUwP8kSjOFVyjwfUYlo0pudYQ/exec';
+  var URL_APP = 'COLLEZ_ICI_L_URL_EXEC';
 
   var ok = /^https:\/\/script\.google\.com\/.+\/exec/.test(URL_APP);
+  var installer = /[?&]installer/.test(location.search);
+  var msg = document.getElementById('msg');
   document.getElementById('go').href = ok ? URL_APP : '#';
-  if (ok) location.replace(URL_APP);
-  else document.getElementById('msg').textContent = 'Collez l’URL /exec de l’application dans ce fichier (ligne URL_APP).';
+  if (!ok) {
+    msg.textContent = 'Collez l’URL /exec de l’application dans ce fichier (ligne URL_APP).';
+  } else if (installer) {
+    /* Mode installation : pas de redirection. On retire « ?installer » de l'adresse pour que le raccourci
+       enregistré sur l'écran d'accueil ouvre ensuite l'application directement. */
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    msg.textContent = 'Appuyez sur Partager, puis « Sur l’écran d’accueil ».';
+  } else {
+    location.replace(URL_APP);
+  }
 </script>
 </body>
 </html>
