@@ -3745,15 +3745,8 @@ MB.isTimedSession = function (s) {
   var reps = /\d+\s*(?:reps?|répétitions?)\b|pyramide|\b\d+\s*[x×]\s*\d+/i.test(h);
   return timed && !reps;
 };
-MB.exSub = function (s, ex) {
-  var sub = String((ex && ex.subtitle) || '');
-  if (!MB.isTimedSession(s)) return sub;
-  var hasReps = /\d+\s*(?:reps?|répétitions?|rép\.?)(?![a-zé])|\d+\s*(?:fois|par\s+(?:jambe|côté|cote|bras)|de\s+chaque|chaque\s+côté)|\b\d+\s*[x×]\s*\d+|(?:^|\s)[x×]\s*\d+|➔|^\s*\d+(?:\s*[-–]\s*\d+)?\s*$/i.test(sub);
-  if (!hasReps) return sub;
-  var m = sub.match(/^\s*\d+(?:\s*[-–]\s*\d+)?\s*(?:reps?|répétitions?|rép\.?)\s*[,·;:]\s*(.+)$/i);
-  if (m && !/➔|\d+\s*(?:reps?|répétitions?)/i.test(m[1])) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
-  return '';
-};
+/* Sous les exercices : aucun texte par défaut, uniquement la note ajoutée par le coach (ex.note) */
+MB.exSub = function (s, ex) { return String((ex && ex.note) || ''); };
 
 /* ---------- Jauge de difficulté : adapte tout le plan (séries, temps de travail, repos, nombre d'exercices) ---------- */
 MB.DIFF_MAX = 9; MB.DIFF_MID = 5;
@@ -4468,14 +4461,14 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
     var info = MB.EXERCISES[ex.svgType] || MB.EXERCISES.squat;
     var card = MB.h('<article class="ex-card"><span class="ex-idx">' + (i + 1) + '</span>' +
       '<div class="ex-stage"><canvas class="ex-canvas" aria-label="Animation 3D : ' + MB.esc(info.name) + '"></canvas><span class="ex-num">' + (i + 1) + '</span></div>' +
-      '<div class="ex-body"><h3 class="ex-title"' + ce + '></h3><p class="ex-sub"' + ce + '></p></div>' +
+      '<div class="ex-body"><h3 class="ex-title"' + ce + '></h3><p class="ex-sub"' + ce + ' data-placeholder="Ajouter une note (facultatif)"></p></div>' +
       '<div class="ex-actions"><button type="button" class="btn btn-ghost btn-sm" data-demo>' + MB.icon('rotate') + '<span>Voir en 3D</span></button>' +
       (opts.editable ? '<span class="ex-tools coach-only"><button type="button" class="btn btn-ghost btn-sm" data-swap title="Choisir un autre mouvement dans la bibliothèque">' + MB.icon('layers') + '<span>Changer</span></button>' +
         (opts.onDelete ? '<button type="button" class="icon-btn icon-btn-sm" data-del title="Retirer cet exercice" aria-label="Retirer cet exercice">' + MB.icon('trash') + '</button>' : '') + '</span>' : '') +
       '</div></article>');
     MB.$('.ex-title', card).textContent = ex.title;
     MB.$('.ex-sub', card).textContent = MB.exSub(s, ex);
-    if (!MB.exSub(s, ex)) MB.$('.ex-sub', card).hidden = true;
+    if (!MB.exSub(s, ex) && !opts.editable) MB.$('.ex-sub', card).hidden = true;
     grid.appendChild(card);
     var cv = MB.$('canvas', card);
     att(cv, ex.svgType);
@@ -4501,7 +4494,7 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
         if (nt && nt !== ex.svgType) { ex.svgType = nt; var ncv = document.createElement('canvas'); ncv.className = 'ex-canvas'; cv.replaceWith(ncv); cv = ncv; att(ncv, nt); }
         opts.onChange && opts.onChange();
       });
-      sub.addEventListener('input', function () { ex.subtitle = sub.innerText.trim(); opts.onChange && opts.onChange(); });
+      sub.addEventListener('input', function () { ex.note = sub.innerText.trim(); opts.onChange && opts.onChange(); });
     }
   });
   if (opts.editable) {
