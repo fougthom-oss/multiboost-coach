@@ -253,6 +253,12 @@ body.app { height: 100%; }
 .timer-pop { position: fixed; z-index: 1200; right: 16px; bottom: 16px; width: min(440px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 22px 54px rgba(0, 0, 0, .38); overflow: hidden; }
 .timer-pop[hidden] { display: none; }
 .timer-pop-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px 6px 16px; background: var(--surface-2); font-weight: 700; cursor: grab; touch-action: none; user-select: none; }
+.timer-title { display: inline-flex; align-items: center; gap: 10px; }
+.timer-grip { width: 12px; height: 18px; flex: none; opacity: .55; background: radial-gradient(circle, currentColor 1.4px, transparent 1.7px) 0 0 / 6px 6px; }
+.timer-pop-head:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.timer-pop.is-dragging { cursor: grabbing; user-select: none; box-shadow: 0 30px 70px rgba(0, 0, 0, .5); }
+.timer-pop.is-dragging .timer-pop-head { cursor: grabbing; }
+.timer-pop .timer-face { touch-action: none; cursor: grab; }
 .timer-pop .timer { border: 0; border-radius: 0; grid-template-columns: minmax(0, 1fr); }
 .timer-pop .timer-clock { font-size: 64px; }
 @media (max-width: 640px) { .board:not(.show-anim) .ex-card { grid-template-columns: auto minmax(0, 1fr); } .board:not(.show-anim) .ex-actions { grid-column: 1 / -1; justify-content: flex-start; } .board:not(.show-anim) .board-grid { padding: 12px; } }
@@ -5292,17 +5298,39 @@ MB.TIMER_PRESETS = {
 /* Minuteur : bouton sous la séance + fenêtre popup déplaçable (le décompte continue si on la ferme) */
 MB.timerOpen = function () {
   if (!MB.timerPop) {
-    var pop = MB.h('<div class="timer-pop" role="dialog" aria-label="Minuteur" hidden><div class="timer-pop-head"><span>Minuteur</span><button type="button" class="icon-btn icon-btn-sm" data-x aria-label="Fermer">\u2715</button></div><div class="timer-pop-body"></div></div>');
+    var pop = MB.h('<div class="timer-pop" role="dialog" aria-label="Minuteur" hidden><div class="timer-pop-head" tabindex="0" title="Glissez pour déplacer (ou flèches du clavier)"><span class="timer-title"><i class="timer-grip" aria-hidden="true"></i>Minuteur</span><button type="button" class="icon-btn icon-btn-sm" data-x aria-label="Fermer">\u2715</button></div><div class="timer-pop-body"></div></div>');
     MB.timerLive = MB.timer(MB.$('.timer-pop-body', pop));
     document.body.appendChild(pop); MB.timerPop = pop;
     MB.$('[data-x]', pop).addEventListener('click', function () { pop.hidden = true; });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pop.hidden) pop.hidden = true; });
-    var head = MB.$('.timer-pop-head', pop), dx = 0, dy = 0, drag = false;
-    head.addEventListener('pointerdown', function (e) { if (e.target.closest('button')) return; var r = pop.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; drag = true; head.setPointerCapture(e.pointerId); });
-    head.addEventListener('pointermove', function (e) { if (!drag) return; pop.style.right = 'auto'; pop.style.bottom = 'auto'; pop.style.left = Math.max(0, Math.min(window.innerWidth - 80, e.clientX - dx)) + 'px'; pop.style.top = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dy)) + 'px'; });
-    head.addEventListener('pointerup', function () { drag = false; });
+    /* Déplaçable : on saisit la barre de titre, le chiffre ou le fond de la fenêtre ; la position est mémorisée */
+    var POS = 'mb_timer_pos', head = MB.$('.timer-pop-head', pop), dx = 0, dy = 0, drag = false;
+    function put(l, t) {
+      var r = pop.getBoundingClientRect();
+      l = Math.max(0, Math.min(window.innerWidth - Math.min(r.width, 120), l));
+      t = Math.max(0, Math.min(window.innerHeight - 48, t));
+      pop.style.right = 'auto'; pop.style.bottom = 'auto'; pop.style.left = l + 'px'; pop.style.top = t + 'px';
+    }
+    function keep() { try { var r = pop.getBoundingClientRect(); localStorage.setItem(POS, JSON.stringify([Math.round(r.left), Math.round(r.top)])); } catch (e) {} }
+    MB.timerRestore = function () {
+      try { var v = JSON.parse(localStorage.getItem(POS) || 'null'); if (v && v.length === 2) put(v[0], v[1]); } catch (e) {}
+    };
+    pop.addEventListener('pointerdown', function (e) {
+      if (e.button > 0 || e.target.closest('button, input, select, textarea, a, label, [contenteditable]')) return;
+      var r = pop.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; drag = true;
+      pop.classList.add('is-dragging'); try { pop.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    pop.addEventListener('pointermove', function (e) { if (drag) put(e.clientX - dx, e.clientY - dy); });
+    function stop() { if (!drag) return; drag = false; pop.classList.remove('is-dragging'); keep(); }
+    pop.addEventListener('pointerup', stop); pop.addEventListener('pointercancel', stop);
+    head.addEventListener('keydown', function (e) {
+      var k = { ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24] }[e.key]; if (!k) return;
+      e.preventDefault(); var r = pop.getBoundingClientRect(); put(r.left + k[0], r.top + k[1]); keep();
+    });
+    window.addEventListener('resize', function () { if (!pop.hidden && pop.style.left) { var r = pop.getBoundingClientRect(); put(r.left, r.top); } });
   }
   MB.timerPop.hidden = false;
+  if (MB.timerRestore) MB.timerRestore();
 };
 MB.timerButton = function (host) {
   host.innerHTML = '';
@@ -7144,7 +7172,7 @@ var MBClient = (function () {
       if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
       else {
         var nid = st.program.sessions[nextI].id, lastId = st.program.sessions[total - 1].id;
-        var shown = function (v) { lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', ''); note.textContent = 'S’applique à partir de la séance ' + nid + ' (les séances déjà faites ne changent pas). ' + MB.diffSummary(v); };
+        var shown = function (v) { lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', ''); note.textContent = ''; note.hidden = true; };
         rg.value = MB.diffLevelFor(st.program, nid); shown(+rg.value);
         rg.addEventListener('input', function () { shown(+rg.value); });
         rg.addEventListener('change', function () {
