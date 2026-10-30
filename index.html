@@ -206,6 +206,28 @@ body.app { height: 100%; }
 .gen-step-n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--petrol); color: var(--on-petrol); font-family: var(--font-display); font-weight: 700; font-size: 17px; }
 .gen-step h3 { font-size: 15.5px; margin: 3px 0 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Liste du matériel (création de programme) */
+.mat-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.mat-pick-recap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mat-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--petrol-soft); color: var(--petrol); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.mat-tag button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; }
+.mat-tag button:hover { background: var(--line); }
+.mat-modal { display: grid; gap: 12px; }
+.mat-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mat-count { font-weight: 700; color: var(--ink-2); }
+.mat-cat { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; background: var(--surface-2); display: grid; gap: 10px; }
+.mat-cat h4 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; margin: 0; }
+.mat-cat h4 small { color: var(--petrol); font-weight: 700; }
+.mat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mat-chip { min-height: 38px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.mat-chip:hover { border-color: var(--petrol); }
+.mat-chip[aria-pressed="true"] { background: var(--petrol); border-color: var(--petrol); color: var(--on-petrol); }
+.mat-chip[aria-pressed="true"]::before { content: "✓"; font-weight: 800; }
+.mat-details { display: grid; gap: 6px; }
+.mat-details:empty { display: none; }
+.mat-detail { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.mat-detail input { min-width: 0; height: 36px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.mat-save { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
 .chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13.5px; cursor: pointer; user-select: none; max-width: 100%; }
 .chip input { accent-color: var(--petrol); margin: 0; }
 .chip:has(input:checked) { border-color: var(--petrol); background: var(--petrol-soft); color: var(--petrol); font-weight: 600; }
@@ -1034,6 +1056,7 @@ body.client-file [contenteditable="true"] { outline: none !important; pointer-ev
                 <div class="badges" id="gen-files"></div></div>
             </div></div></div>
           <div class="gen-step"><span class="gen-step-n">4</span><div><h3>Consignes du coach</h3>
+            <div class="mat-pick"><button type="button" class="btn btn-ghost btn-sm" data-action="pick-materiel" data-ctx="dossier"><i data-ic="dumbbell"></i><span>Liste du matériel</span></button><div class="mat-pick-recap" id="gen-mat-recap" aria-live="polite"></div></div>
             <label class="field" for="gen-notes"><span class="field-label"><span>Précisions pour ce client</span><button type="button" class="mini-link" data-dictate="gen-notes"><i data-ic="mic"></i>Dicter</button></span>
               <textarea id="gen-notes" rows="2" placeholder="Ex. fentes arrière lentes avec appui talon, pacing cardiaque sous 115 bpm, galbe fessier"></textarea></label></div></div>
           <div class="gen-actions">
@@ -1132,7 +1155,8 @@ body.client-file [contenteditable="true"] { outline: none !important; pointer-ev
             <label class="field" for="free-goal"><span class="field-label">Objectif</span><input type="text" id="free-goal" value="Affiner la silhouette sans impact, fessiers et posture"></label>
           </div>
           <label class="field" for="free-plan"><span class="field-label">Type de plan</span><select id="free-plan"><option value="Combiné (entraînement + nutrition)">Entraînement + nutrition (Multi Boost)</option><option value="Entraînement seul">Entraînement seul (Training Boost)</option><option value="Nutrition seule">Nutrition seule (Nutri Boost)</option></select></label>
-          <label class="field" for="free-notes"><span class="field-label"><span>Consignes d'effort & sources</span><button type="button" class="mini-link" data-dictate="free-notes"><i data-ic="mic"></i>Dicter</button></span><textarea id="free-notes" rows="2" placeholder="Consignes particulières, tempo, antécédents…"></textarea></label>
+          <div class="mat-pick"><button type="button" class="btn btn-ghost btn-sm" data-action="pick-materiel" data-ctx="free"><i data-ic="dumbbell"></i><span>Liste du matériel</span></button><div class="mat-pick-recap" id="free-mat-recap" aria-live="polite"></div></div>
+            <label class="field" for="free-notes"><span class="field-label"><span>Consignes d'effort & sources</span><button type="button" class="mini-link" data-dictate="free-notes"><i data-ic="mic"></i>Dicter</button></span><textarea id="free-notes" rows="2" placeholder="Consignes particulières, tempo, antécédents…"></textarea></label>
           <div class="gen-actions">
             <button type="button" class="btn btn-primary" data-action="claude-prompt" data-ctx="free"><i data-ic="spark"></i><span>Préparer la demande pour Claude</span></button>
             <button type="button" class="btn btn-ghost" data-action="claude-import" data-ctx="free"><i data-ic="download"></i><span>Importer la réponse</span></button>
@@ -8433,7 +8457,7 @@ var MBCoach = (function () {
 
   var S = {
     patients: [], library: [], customOptions: {},
-    cur: -1, editing: -1, formFiles: [], genFiles: [],
+    cur: -1, editing: -1, formFiles: [], genFiles: [], genMat: {}, genMatFor: -1,
     ctx: { dossier: { prog: null, idx: 0, done: [], week: 1 }, free: { prog: null, idx: 0, done: [], week: 1 } },
     active: 'dossier', timers: {}
   };
@@ -8749,6 +8773,7 @@ var MBCoach = (function () {
     var sexe = free ? '' : (p && p.sexe && p.sexe !== 'Non précisé' ? p.sexe : '');
     var goal = free ? val('free-goal') : (p ? p.objectif : '');
     var notes = val(free ? 'free-notes' : 'gen-notes');
+    var matSel = genMatSel(ctxName), matTxt = matSel ? selText(matSel) : (p ? ((p.materiel && p.materiel.trim()) ? p.materiel.trim().replace(/\n+/g, ' | ') : 'aucun (poids du corps uniquement)') : '');
     var femme = /femme/i.test(free ? val('free-name') : sexe);
     var vigilance = femme ? 'préservation du plancher pelvien, zéro apnée de Valsalva, aucun impact violent, fentes arrière lentes' : 'protection articulaire, zéro apnée de Valsalva, progressivité de la charge';
     var o = {}; GEN_OPTIONS.forEach(function (g) { o[g.id] = val('gen-' + g.id) || g.opts[0][0]; });
@@ -8769,7 +8794,7 @@ var MBCoach = (function () {
       '- Vigilance : ' + vigilance + '.\n' +
       (p && p.medical ? '- Santé & articulations : ' + p.medical + '\n' : '') +
       (p && p.evictions ? '- Évictions alimentaires : ' + p.evictions + '\n' : '') +
-      (p ? '- Matériel disponible à domicile : ' + (p.materiel && p.materiel.trim() ? p.materiel.trim().replace(/\n+/g, ' | ') + ' (n’utilise que ce matériel ou le poids du corps, et adapte les exercices en conséquence)' : 'aucun (poids du corps uniquement)') + '\n' : '') +
+      (matTxt ? '- Matériel disponible à domicile : ' + matTxt + (/^aucun/.test(matTxt) ? '' : ' (n’utilise que ce matériel ou le poids du corps, et adapte les exercices en conséquence)') + '\n' : '') +
       '- Objectif : ' + (goal || 'Affiner et raffermir la silhouette') + '\n' +
       '- Consignes du coach : ' + (notes || 'Tempo contrôlé, fentes arrière lentes, galbe fessier et taille affinée.') + '\n\n' +
       '### 2. CONFIGURATION DU PROGRAMME\n- Contenu : ' + o.plan + '\n- Protocole d’entraînement : ' + o.train + '\n- Fréquence : ' + o.freq + ' | Durée : ' + o.duration + '\n- Orientation nutritionnelle : ' + o.diet + '\n- Recettes : ' + o.recipes + '\n\n' +
@@ -8798,7 +8823,7 @@ var MBCoach = (function () {
       var c = S.ctx[ctxName];
       var base = c.prog ? MB.clone(c.prog) : (ctxName === 'free' ? freeProgram() : programForClient(cur()));
       base.sessions = sessions; base.weeks = (c.prog || base).weeks;
-      c.prog = MB.normalizeProgram(base); equipPlan(c.prog, ctxName, MB.nutritionFromResponse(r.raw)); c.idx = 0; c.done = []; c.week = 1;
+      c.prog = MB.normalizeProgram(base); equipPlan(c.prog, ctxName, MB.nutritionFromResponse(r.raw)); matLocation(c.prog, ctxName); c.idx = 0; c.done = []; c.week = 1;
       commit(ctxName); renderProgram(ctxName);
       MB.ui.toast(sessions.length + ' séance(s) importée(s) depuis Claude.');
       scrollToProgram(ctxName);
@@ -8822,7 +8847,7 @@ var MBCoach = (function () {
     var c = S.ctx[ctxName];
     if (ctxName === 'dossier') { if (!cur()) return; c.prog = programForClient(cur(), val('gen-notes')); }
     else c.prog = freeProgram();
-    equipPlan(c.prog, ctxName);
+    equipPlan(c.prog, ctxName); matLocation(c.prog, ctxName);
     c.idx = 0; c.done = []; c.week = 1;
     commit(ctxName); renderProgram(ctxName);
     var k = MB.planKey(c.prog.planType);
@@ -9214,6 +9239,119 @@ var MBCoach = (function () {
     MB.MATERIEL_CATS.forEach(function (c) { c.items.forEach(function (it) { var f = found[it[0]]; if (f) items.push({ id: it[0], category: c.title, label: it[1], detail: f.detail || '' }); }); });
     return { type: 'multiboost-materiel', version: 1, date: new Date().toISOString(), client: clientName || '', lieu: lieux.join(' · '), espace: espace, aucunMateriel: !items.length && none, materiel: items, autre: autre.join(', '), remarques: rem.join(' ').slice(0, 400), source: 'texte collé' };
   }
+  /* ---------- Liste du matériel : sélection par clic pour la création du programme ---------- */
+  function genMatSel(ctx) { if (ctx === 'dossier' && S.genMatFor !== S.cur) return null; return S.genMat[ctx] || null; }
+  function selOn(sel) {
+    var out = []; if (!sel || sel.none) return out;
+    MB.MATERIEL_CATS.forEach(function (c) { c.items.forEach(function (it) { var x = sel.items[it[0]]; if (x && x.on) out.push({ id: it[0], category: c.title, label: it[1], detail: (x.detail || '').trim() }); }); });
+    return out;
+  }
+  function selText(sel) {
+    if (sel.none) return 'aucun (poids du corps uniquement)';
+    var l = selOn(sel).map(function (x) { return x.label + (x.detail ? ' (' + x.detail + ')' : ''); });
+    if ((sel.other || '').trim()) l.push(sel.other.trim());
+    return l.length ? l.join(', ') : 'aucun (poids du corps uniquement)';
+  }
+  function selFromClient(p) {
+    var s = { none: false, items: {}, other: '' }, first = String((p && p.materiel) || '').split('\n')[0];
+    var d = p && (p.materielData || (first.trim() ? parseMateriel(first, p.nom) : null));
+    if (!d) return s;
+    s.none = !!d.aucunMateriel;
+    var known = {}; MB.MATERIEL_CATS.forEach(function (c) { c.items.forEach(function (it) { known[it[0]] = 1; }); });
+    (d.materiel || []).forEach(function (x) { if (known[x.id]) s.items[x.id] = { on: true, detail: x.detail || '' }; else s.other += (s.other ? ', ' : '') + x.label; });
+    if (d.autre) s.other += (s.other ? ', ' : '') + d.autre;
+    return s;
+  }
+  function matLocation(prog, ctx) {
+    var sel = genMatSel(ctx); if (!sel || !prog || !prog.client) return;
+    var on = selOn(sel).map(function (x) { return x.label; }), short = sel.none || (!on.length && !(sel.other || '').trim()) ? '0 matériel' : on.slice(0, 3).concat((sel.other || '').trim() ? [sel.other.trim()] : []).slice(0, 3).join(', ') + (on.length > 3 ? '…' : '');
+    prog.client.location = 'Maison (' + short + ')';
+  }
+  function renderMatRecap(ctx) {
+    var host = $(ctx === 'free' ? '#free-mat-recap' : '#gen-mat-recap'); if (!host) return;
+    var sel = genMatSel(ctx); host.innerHTML = '';
+    if (!sel) { var m = MB.h('<span class="muted"></span>'); m.textContent = ctx === 'free' ? 'Aucun matériel précisé.' : 'Matériel du dossier utilisé.'; host.appendChild(m); return; }
+    var tags = [];
+    if (sel.none) tags.push({ label: 'Poids du corps', rm: function () { sel.none = false; } });
+    else {
+      selOn(sel).forEach(function (x) { tags.push({ label: x.label + (x.detail ? ' (' + x.detail + ')' : ''), rm: function () { sel.items[x.id].on = false; } }); });
+      if ((sel.other || '').trim()) tags.push({ label: sel.other.trim(), rm: function () { sel.other = ''; } });
+    }
+    if (!tags.length) { var n = MB.h('<span class="muted"></span>'); n.textContent = 'Aucun matériel (poids du corps).'; host.appendChild(n); return; }
+    tags.forEach(function (t) {
+      var el = MB.h('<span class="mat-tag"><span></span><button type="button" aria-label="Retirer">×</button></span>');
+      el.firstChild.textContent = t.label;
+      el.lastChild.addEventListener('click', function () { t.rm(); renderMatRecap(ctx); });
+      host.appendChild(el);
+    });
+  }
+  function pickMateriel(ctx) {
+    var p = ctx === 'dossier' ? cur() : null;
+    if (ctx === 'dossier' && !p) return;
+    var sel = MB.clone(genMatSel(ctx) || (p ? selFromClient(p) : { none: false, items: {}, other: '' }));
+    var body = MB.h('<div class="mat-modal"></div>'), cats = [];
+    var top = MB.h('<div class="mat-top"><span class="mat-count" aria-live="polite"></span><div class="row" style="gap:6px;flex-wrap:wrap"></div></div>');
+    var tools = MB.$('.row', top);
+    var noneBtn = MB.h('<button type="button" class="mat-chip" aria-pressed="false"><span>Aucun matériel (poids du corps)</span></button>');
+    noneBtn.addEventListener('click', function () { sel.none = !sel.none; refresh(); });
+    tools.appendChild(noneBtn);
+    var clear = MB.h('<button type="button" class="btn btn-ghost btn-sm">Tout décocher</button>');
+    clear.addEventListener('click', function () { sel = { none: false, items: {}, other: '' }; otherInp.value = ''; refresh(); });
+    tools.appendChild(clear);
+    if (p && ((p.materiel && p.materiel.trim()) || p.materielData)) {
+      var again = MB.h('<button type="button" class="btn btn-ghost btn-sm">Reprendre celui du client</button>');
+      again.addEventListener('click', function () { sel = selFromClient(p); otherInp.value = sel.other || ''; refresh(); });
+      tools.appendChild(again);
+    }
+    body.appendChild(top);
+    var otherLab = MB.h('<label class="field"><span class="field-label">Autre matériel</span><input type="text" placeholder="Ex. : barre de porte, sac de sable…"></label>');
+    var otherInp = MB.$('input', otherLab); otherInp.value = sel.other || '';
+    otherInp.addEventListener('input', function () { sel.other = otherInp.value; });
+    MB.MATERIEL_CATS.forEach(function (c) {
+      var box = MB.h('<section class="mat-cat"><h4><span></span><small></small></h4><div class="mat-chips"></div><div class="mat-details"></div></section>');
+      MB.$('h4 span', box).textContent = c.title;
+      c.items.forEach(function (it) {
+        var b = MB.h('<button type="button" class="mat-chip" aria-pressed="false"></button>'); b.textContent = it[1]; b.dataset.id = it[0];
+        b.addEventListener('click', function () { sel.none = false; var x = sel.items[it[0]] || (sel.items[it[0]] = { on: false, detail: '' }); x.on = !x.on; refresh(); });
+        MB.$('.mat-chips', box).appendChild(b);
+      });
+      cats.push({ box: box, c: c }); body.appendChild(box);
+    });
+    body.appendChild(otherLab);
+    var saveBox = null;
+    if (p) { var sl = MB.h('<label class="mat-save"><input type="checkbox"><span></span></label>'); MB.$('span', sl).textContent = 'Enregistrer aussi cette liste dans le dossier de ' + p.nom; saveBox = MB.$('input', sl); body.appendChild(sl); }
+    function refresh() {
+      noneBtn.setAttribute('aria-pressed', !!sel.none);
+      var total = 0;
+      cats.forEach(function (k) {
+        var n = 0, dh = MB.$('.mat-details', k.box); dh.innerHTML = '';
+        MB.$$('.mat-chip', k.box).forEach(function (b) { var x = sel.items[b.dataset.id], on = !!(x && x.on) && !sel.none; b.setAttribute('aria-pressed', on); if (on) n++; });
+        k.c.items.forEach(function (it) {
+          var x = sel.items[it[0]]; if (sel.none || !x || !x.on || !it[2]) return;
+          var row = MB.h('<label class="mat-detail"><span></span><input type="text"></label>'), inp = MB.$('input', row);
+          MB.$('span', row).textContent = it[1]; inp.placeholder = it[2]; inp.value = x.detail || '';
+          inp.addEventListener('input', function () { x.detail = inp.value; });
+          dh.appendChild(row);
+        });
+        MB.$('small', k.box).textContent = n ? n + ' sélectionné' + (n > 1 ? 's' : '') : '';
+        total += n;
+      });
+      MB.$('.mat-count', top).textContent = sel.none ? 'Poids du corps uniquement' : total ? total + ' élément' + (total > 1 ? 's' : '') + ' sélectionné' + (total > 1 ? 's' : '') : 'Cliquez sur le matériel disponible';
+    }
+    refresh();
+    MB.ui.modal({ title: 'Liste du matériel', body: body, wide: true, actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Ajouter à la création du programme', value: 'ok', kind: 'btn-primary' }] }).then(function (v) {
+      if (v !== 'ok') return;
+      sel.other = otherInp.value;
+      S.genMat[ctx] = sel; if (ctx === 'dossier') S.genMatFor = S.cur;
+      if (saveBox && saveBox.checked && p) {
+        var old = p.materielData || {}, items = selOn(sel);
+        var data = { type: 'multiboost-materiel', version: 1, date: new Date().toISOString(), client: p.nom || '', lieu: old.lieu || '', espace: old.espace || '', aucunMateriel: !!sel.none || (!items.length && !(sel.other || '').trim()), materiel: items, autre: (sel.other || '').trim(), remarques: old.remarques || '' };
+        p.materielData = data; p.materiel = materielFromFile(data) || ''; savePatients(true);
+      }
+      renderMatRecap(ctx);
+      MB.ui.toast('Matériel ajouté à la création du programme.');
+    });
+  }
   function matRecap(data) {
     var box = MB.h('<div class="stack"></div>'), line = function (x) { return x.label + (x.detail ? ' (' + x.detail + ')' : ''); };
     function row(title, text) { var r = MB.h('<div><h4 style="margin:0 0 2px"></h4><p class="lede" style="margin:0"></p></div>'); MB.$('h4', r).textContent = title; MB.$('p', r).textContent = text; box.appendChild(r); }
@@ -9340,6 +9478,7 @@ var MBCoach = (function () {
         case 'delete-client': deleteClient(); break;
         case 'export-all': exportAll(); break;
         case 'add-resource': addResource(); break;
+        case 'pick-materiel': pickMateriel(ctxName); break;
         case 'claude-prompt': claudePrompt(ctxName); break;
         case 'claude-import': claudeImport(ctxName); break;
         case 'generate-local': generateLocal(ctxName); break;
