@@ -253,12 +253,6 @@ body.app { height: 100%; }
 .timer-pop { position: fixed; z-index: 1200; right: 16px; bottom: 16px; width: min(440px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 22px 54px rgba(0, 0, 0, .38); overflow: hidden; }
 .timer-pop[hidden] { display: none; }
 .timer-pop-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px 6px 16px; background: var(--surface-2); font-weight: 700; cursor: grab; touch-action: none; user-select: none; }
-.timer-title { display: inline-flex; align-items: center; gap: 10px; }
-.timer-grip { width: 12px; height: 18px; flex: none; opacity: .55; background: radial-gradient(circle, currentColor 1.4px, transparent 1.7px) 0 0 / 6px 6px; }
-.timer-pop-head:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
-.timer-pop.is-dragging { cursor: grabbing; user-select: none; box-shadow: 0 30px 70px rgba(0, 0, 0, .5); }
-.timer-pop.is-dragging .timer-pop-head { cursor: grabbing; }
-.timer-pop .timer-face { touch-action: none; cursor: grab; }
 .timer-pop .timer { border: 0; border-radius: 0; grid-template-columns: minmax(0, 1fr); }
 .timer-pop .timer-clock { font-size: 64px; }
 @media (max-width: 640px) { .board:not(.show-anim) .ex-card { grid-template-columns: auto minmax(0, 1fr); } .board:not(.show-anim) .ex-actions { grid-column: 1 / -1; justify-content: flex-start; } .board:not(.show-anim) .board-grid { padding: 12px; } }
@@ -321,6 +315,10 @@ body.app { height: 100%; }
 .timer-adjust .stp button { height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 18px; font-weight: 700; cursor: pointer; line-height: 1; }
 .timer-adjust .stp input { width: 100%; min-width: 0; height: 34px; text-align: center; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
 .timer-adjust .stp input::-webkit-outer-spin-button, .timer-adjust .stp input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.timer-prog { display: grid; gap: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.timer-prog-toggle { justify-self: start; }
+.timer-prog-toggle[aria-expanded="true"] { border-color: var(--petrol); color: var(--petrol); }
+.timer-prog-toggle.is-alert { border-color: var(--amber); color: var(--amber-ink); background: var(--amber-soft); }
 .timer-sync { font-size: 12.5px; color: var(--ink-3); line-height: 1.4; }
 .timer-sync.is-stale { color: var(--amber-ink); font-weight: 600; }
 
@@ -1002,7 +1000,7 @@ body.client-file [contenteditable="true"] { outline: none !important; pointer-ev
 
       <div class="dossier-grid">
         <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Profil & antécédents</h2><label class="btn btn-ghost btn-sm"><i data-ic="upload"></i><span>Importer le matériel</span><input type="file" id="import-materiel" accept=".json" hidden></label></div>
+          <div class="panel-head"><h2 class="panel-title">Profil & antécédents</h2><div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-ghost btn-sm" id="paste-materiel"><i data-ic="text"></i><span>Coller du texte</span></button><label class="btn btn-ghost btn-sm"><i data-ic="upload"></i><span>Importer le matériel</span><input type="file" id="import-materiel" accept=".json" hidden></label></div></div>
           <dl class="kv" id="d-profile"></dl>
         </section>
         <section class="panel">
@@ -1237,7 +1235,7 @@ body.client-file [contenteditable="true"] { outline: none !important; pointer-ev
         <label class="field" for="f-diet"><span class="field-label">Évictions alimentaires</span><input type="text" id="f-diet" value="Sans gluten, sans lactose, sans œuf, sans sucre raffiné"></label>
         <label class="field" for="f-medical"><span class="field-label">Santé, articulations & plancher pelvien</span><textarea id="f-medical" rows="2" placeholder="Protection lombaire, rotules fragiles, renforcement du plancher pelvien…"></textarea></label>
         <label class="field" for="f-materiel"><span class="field-label">Matériel disponible à la maison</span><textarea id="f-materiel" rows="3" placeholder="Laisser vide = aucun matériel (poids du corps). Ex. : tapis, haltères 2 × 5 kg, élastiques…"></textarea></label>
-        <div class="row" style="justify-content:flex-start;margin-top:-6px"><label class="btn btn-ghost btn-sm"><i data-ic="upload"></i><span>Importer le fichier matériel du client</span><input type="file" id="import-materiel-form" accept=".json" hidden></label></div>
+        <div class="row" style="justify-content:flex-start;margin-top:-6px"><label class="btn btn-ghost btn-sm"><i data-ic="upload"></i><span>Importer le fichier matériel du client</span><input type="file" id="import-materiel-form" accept=".json" hidden></label><button type="button" class="btn btn-ghost btn-sm" id="paste-materiel-form"><i data-ic="text"></i><span>Coller du texte</span></button></div>
         <label class="field" for="f-notes"><span class="field-label">Notes & disponibilités</span><textarea id="f-notes" rows="2" placeholder="3 séances par semaine à domicile, 45 à 55 minutes, lundi / mercredi / vendredi…"></textarea></label>
         <div class="field"><span class="field-label">Bilans et documents initiaux <span class="muted" id="f-files-count">0 fichier</span></span>
           <div class="dropzone" id="form-dropzone" tabindex="0" role="button">Cliquez ou glissez des fichiers ici</div>
@@ -5298,39 +5296,17 @@ MB.TIMER_PRESETS = {
 /* Minuteur : bouton sous la séance + fenêtre popup déplaçable (le décompte continue si on la ferme) */
 MB.timerOpen = function () {
   if (!MB.timerPop) {
-    var pop = MB.h('<div class="timer-pop" role="dialog" aria-label="Minuteur" hidden><div class="timer-pop-head" tabindex="0" title="Glissez pour déplacer (ou flèches du clavier)"><span class="timer-title"><i class="timer-grip" aria-hidden="true"></i>Minuteur</span><button type="button" class="icon-btn icon-btn-sm" data-x aria-label="Fermer">\u2715</button></div><div class="timer-pop-body"></div></div>');
+    var pop = MB.h('<div class="timer-pop" role="dialog" aria-label="Minuteur" hidden><div class="timer-pop-head"><span>Minuteur</span><button type="button" class="icon-btn icon-btn-sm" data-x aria-label="Fermer">\u2715</button></div><div class="timer-pop-body"></div></div>');
     MB.timerLive = MB.timer(MB.$('.timer-pop-body', pop));
     document.body.appendChild(pop); MB.timerPop = pop;
     MB.$('[data-x]', pop).addEventListener('click', function () { pop.hidden = true; });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pop.hidden) pop.hidden = true; });
-    /* Déplaçable : on saisit la barre de titre, le chiffre ou le fond de la fenêtre ; la position est mémorisée */
-    var POS = 'mb_timer_pos', head = MB.$('.timer-pop-head', pop), dx = 0, dy = 0, drag = false;
-    function put(l, t) {
-      var r = pop.getBoundingClientRect();
-      l = Math.max(0, Math.min(window.innerWidth - Math.min(r.width, 120), l));
-      t = Math.max(0, Math.min(window.innerHeight - 48, t));
-      pop.style.right = 'auto'; pop.style.bottom = 'auto'; pop.style.left = l + 'px'; pop.style.top = t + 'px';
-    }
-    function keep() { try { var r = pop.getBoundingClientRect(); localStorage.setItem(POS, JSON.stringify([Math.round(r.left), Math.round(r.top)])); } catch (e) {} }
-    MB.timerRestore = function () {
-      try { var v = JSON.parse(localStorage.getItem(POS) || 'null'); if (v && v.length === 2) put(v[0], v[1]); } catch (e) {}
-    };
-    pop.addEventListener('pointerdown', function (e) {
-      if (e.button > 0 || e.target.closest('button, input, select, textarea, a, label, [contenteditable]')) return;
-      var r = pop.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; drag = true;
-      pop.classList.add('is-dragging'); try { pop.setPointerCapture(e.pointerId); } catch (err) {}
-    });
-    pop.addEventListener('pointermove', function (e) { if (drag) put(e.clientX - dx, e.clientY - dy); });
-    function stop() { if (!drag) return; drag = false; pop.classList.remove('is-dragging'); keep(); }
-    pop.addEventListener('pointerup', stop); pop.addEventListener('pointercancel', stop);
-    head.addEventListener('keydown', function (e) {
-      var k = { ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24] }[e.key]; if (!k) return;
-      e.preventDefault(); var r = pop.getBoundingClientRect(); put(r.left + k[0], r.top + k[1]); keep();
-    });
-    window.addEventListener('resize', function () { if (!pop.hidden && pop.style.left) { var r = pop.getBoundingClientRect(); put(r.left, r.top); } });
+    var head = MB.$('.timer-pop-head', pop), dx = 0, dy = 0, drag = false;
+    head.addEventListener('pointerdown', function (e) { if (e.target.closest('button')) return; var r = pop.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; drag = true; head.setPointerCapture(e.pointerId); });
+    head.addEventListener('pointermove', function (e) { if (!drag) return; pop.style.right = 'auto'; pop.style.bottom = 'auto'; pop.style.left = Math.max(0, Math.min(window.innerWidth - 80, e.clientX - dx)) + 'px'; pop.style.top = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dy)) + 'px'; });
+    head.addEventListener('pointerup', function () { drag = false; });
   }
   MB.timerPop.hidden = false;
-  if (MB.timerRestore) MB.timerRestore();
 };
 MB.timerButton = function (host) {
   host.innerHTML = '';
@@ -5381,8 +5357,16 @@ MB.timer = function (host) {
   var el = MB.h('<section class="timer" aria-label="Minuteur">' +
     '<div class="timer-face"><span class="timer-mode"></span><output class="timer-clock">00:30</output><span class="timer-phase"></span><div class="timer-meta"><span>Tour <b class="t-round">1 / 5</b></span><div class="timer-bar"><i></i></div></div></div>' +
     '<div class="timer-side"><div class="timer-ctl"><button type="button" class="btn btn-accent" data-start>' + MB.icon('play') + '<span>Démarrer</span></button><button type="button" class="btn btn-ghost" data-reset>' + MB.icon('reset') + '<span>Remettre à zéro</span></button></div>' +
-    '<div class="timer-adjust" aria-label="Réglage manuel"></div><div class="timer-sync" aria-live="polite"></div>' +
-    '<div class="timer-presets" role="radiogroup" aria-label="Format"></div></div></section>');
+    '<button type="button" class="btn btn-ghost btn-sm timer-prog-toggle" aria-expanded="false" aria-controls="timer-prog">' + MB.icon('layers') + '<span>Programme et réglages</span></button>' +
+    '<div class="timer-prog" id="timer-prog" hidden><div class="timer-adjust" aria-label="Réglage manuel"></div><div class="timer-sync" aria-live="polite"></div>' +
+    '<div class="timer-presets" role="radiogroup" aria-label="Format"></div></div></div></section>');
+  var progBox = MB.$('.timer-prog', el), progBtn = MB.$('.timer-prog-toggle', el);
+  function setProg(open) {
+    MB.timerProgOpen = open; progBox.hidden = !open; progBtn.setAttribute('aria-expanded', open);
+    MB.$('span', progBtn).textContent = open ? 'Masquer le programme' : 'Programme et réglages';
+  }
+  progBtn.addEventListener('click', function () { setProg(progBox.hidden); });
+  setProg(!!MB.timerProgOpen);
   var presets = MB.$('.timer-presets', el), adjust = MB.$('.timer-adjust', el);
   var FIELDS = [['work', 'Effort (s)', 5, 5, 3600], ['rest', 'Repos (s)', 5, 0, 900], ['rounds', 'Tours', 1, 1, 99]];
   FIELDS.forEach(function (f) {
@@ -5422,6 +5406,7 @@ MB.timer = function (host) {
     FIELDS.forEach(function (f) { var i = MB.$('[data-f=' + f[0] + ']', el); if (document.activeElement !== i) i.value = p[f[0]]; });
     var sy = MB.$('.timer-sync', el), ses = MB.TIMER_PRESETS.session;
     sy.classList.toggle('is-stale', !!st.stale);
+    progBtn.classList.toggle('is-alert', !!st.stale);
     sy.textContent = st.stale ? 'La séance a changé (difficulté ou protocole) : remettez à zéro pour appliquer.' :
       st.key === 'session' ? 'Calé sur la séance : mis à jour automatiquement avec le protocole et la jauge de difficulté. Modifiez les valeurs ci-dessus pour un réglage manuel.' :
       st.key === 'perso' ? 'Réglage manuel conservé' + (ses ? ' · touchez « ' + ses.name + ' (auto) » pour revenir au calage sur la séance.' : '.') : '';
@@ -7172,7 +7157,7 @@ var MBClient = (function () {
       if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
       else {
         var nid = st.program.sessions[nextI].id, lastId = st.program.sessions[total - 1].id;
-        var shown = function (v) { lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', ''); note.textContent = ''; note.hidden = true; };
+        var shown = function (v) { lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', ''); note.textContent = 'S’applique à partir de la séance ' + nid + ' (les séances déjà faites ne changent pas). ' + MB.diffSummary(v); };
         rg.value = MB.diffLevelFor(st.program, nid); shown(+rg.value);
         rg.addEventListener('input', function () { shown(+rg.value); });
         rg.addEventListener('change', function () {
@@ -9120,6 +9105,12 @@ var MBCoach = (function () {
     var r = new FileReader();
     r.onload = function (e) {
       var data; try { data = JSON.parse(e.target.result); } catch (err) { data = null; }
+      applyMateriel(data, inForm);
+    };
+    r.readAsText(file);
+  }
+  function applyMateriel(data, inForm) {
+    {
       var txt = materielFromFile(data);
       if (txt === null) { MB.ui.toast('Ce fichier n’est pas un fichier matériel Multi Boost.', 'err'); return; }
       if (!txt) { MB.ui.toast('Ce fichier ne contient aucun matériel.', 'warn'); return; }
@@ -9132,8 +9123,117 @@ var MBCoach = (function () {
       };
       if (p.materiel && p.materiel.trim() && p.materiel.trim() !== txt) MB.ui.confirm('Remplacer le matériel actuel de ' + p.nom + ' par celui du fichier ?', 'Remplacer').then(function (ok) { if (ok) apply(); });
       else apply();
-    };
-    r.readAsText(file);
+    }
+  }
+
+  /* ---------- Matériel : texte collé (message du client, liste…) → fichier matériel rangé par catégories ---------- */
+  var MAT_RULES = [
+    ['course', /tapis (?:de course|roulant)|treadmill/],
+    ['elliptique', /(?:velo )?elliptique|cross ?trainer/],
+    ['traction', /barre (?:de |a )?(?:traction|porte)|barre fixe|pull ?-?ups?/],
+    ['suspension', /\btrx\b|sangles? (?:de )?suspension|suspension/],
+    ['medball', /me(?:de|di)cine[ -]?ball|med[ -]?ball|ballon (?:lest|medicinal)|slam ?ball/],
+    ['swiss', /swiss ?ball|gym ?ball|fit ?ball|ballon (?:de |d')?(?:gym|pilates|suisse|equilibre)/],
+    ['roue', /roue (?:abdominale|a abdos)|ab ?wheel|ab ?roller|roulette abdo/],
+    ['foam', /foam ?roller|rouleau(?: de massage| mousse)?/],
+    ['rameur', /rameur|rowing|\browers?\b/],
+    ['velo', /velo(?: d'appartement| appartement)?|home ?trainer|\bbike\b|spinning/],
+    ['corde', /corde (?:a )?sauter|jump ?rope|skipping|\bcordes?\b/],
+    ['kettlebell', /kettle ?-?bells?|\bkettle\b|girevoy/],
+    ['halteres', /halteres?|dumb?bells?|poids libres?/],
+    ['lests', /\blests?\b|poids (?:de |aux )?(?:chevilles?|poignets?)|chevilleres?|(?:bracelets?|poignets?|chevilles?) lestes?/],
+    ['serviette', /serviettes?|\bdraps?\b|\bsliders?\b|disques? de glisse|glisseurs?/],
+    ['barre', /barre(?: olympique| de (?:musculation|poids)| et disques| a disques)?|\bdisques?\b/],
+    ['banc', /\bbancs?\b/],
+    ['step', /\bstep(?:per)?\b/],
+    ['elastiques', /elastiques?|bandes? (?:de resistance|elastiques?)|mini ?-?bandes?|mini ?band|resistance bands?|booty ?bands?|tubing/],
+    ['tapis', /tapis(?: de (?:sol|yoga|gym|fitness|pilates))?|matelas(?: de sol)?|yoga mat/],
+    ['chaise', /chaises?|tabouret/],
+    ['mur', /\bmurs?\b/],
+    ['marche', /escalier|\b(?:une|des|1|2|3|petite|petites|grosse|grosses) marches?\b|\bmarches? (?:d'escalier|pour|solide|en bois)/],
+    ['sac', /sac (?:a dos|de sable)|bouteilles?|bidons?/]
+  ];
+  function matNorm(s) { return Array.from(s).map(function (c) { var n = c.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return (n.length === 1 ? n : c).toLowerCase(); }).join('').replace(/[’‘`´]/g, "'"); }
+  function matDetail(id, t) {
+    var m, d = '', W = '(\\d+(?:\\.\\d+)?)', KG = '\\s*(?:kg|kilos?|k\\b)', fmt = function (x) { return String(x).replace('.', ','); };
+    if (['halteres', 'kettlebell', 'lests', 'barre', 'medball'].indexOf(id) !== -1) {
+      if ((m = t.match(new RegExp('(\\d+)\\s*(?:halteres?|kettle ?bells?|kettle|lests?|barres?|me(?:de|di)cine ?balls?|med ?balls?)\\s*(?:de|d\')?\\s*' + W + KG)))) d = (Number(m[1]) > 1 ? m[1] + ' × ' : '') + fmt(m[2]) + ' kg';
+      else if ((m = t.match(new RegExp(W + '\\s*(?:x|×|fois)\\s*' + W + KG)))) d = fmt(m[1]) + ' × ' + fmt(m[2]) + ' kg';
+      else if ((m = t.match(new RegExp(W + '\\s*(?:a|-|–)\\s*' + W + KG)))) d = 'de ' + fmt(m[1]) + ' à ' + fmt(m[2]) + ' kg';
+      else if ((m = t.match(new RegExp('(\\d+(?:\\.\\d+)?(?:\\/\\d+(?:\\.\\d+)?)+)' + KG)))) d = fmt(m[1]).replace(/\//g, ' / ') + ' kg';
+      else if ((m = t.match(new RegExp(W + KG)))) d = fmt(m[1]) + ' kg';
+    } else if (id === 'elastiques') {
+      var parts = [], c = t.match(/(\d+)\s*(?:elastiques?|bandes?|mini ?-?bandes?)/);
+      if (c && Number(c[1]) > 1) parts.push(c[1] + ' bandes');
+      [[/tres legere?s?|extra ?legere?s?/, 'très légère'], [/\blegere?s?\b/, 'légère'], [/\bmoyenne?s?\b/, 'moyenne'], [/\b(?:forte?s?|dures?)\b/, 'forte'], [/lourdes?|tres fortes?|extra ?fortes?/, 'très forte']].forEach(function (r) { if (r[0].test(t)) parts.push(r[1]); });
+      d = parts.join(', ');
+    }
+    return d;
+  }
+  function parseMateriel(raw, clientName) {
+    var orig = String(raw || '').replace(/\r/g, '');
+    var prot = orig.replace(/(\d),(?=\d)/g, '$1\uE001').replace(/(\d+(?:\uE001\d+)?\s*(?:kg|kilos?)?)(\s*(?:,|;|\bet\b|\/)\s*)(?=\d)/gi, function (m, a, sep) { return a + sep.replace(/[\s\S]/g, '\uE000'); });
+    var SPLIT = /\n|;|•|·|\s[-–—]\s|,|\bet\b|\bpuis\b|\bainsi que\b|\bavec\b|\+|[.!?](?=\s|$)|:/gi, segs = [], last = 0, mm;
+    function push(a, b) { var o = orig.slice(a, b).replace(/^[\s\-–—*•·]+/, '').trim(); if (o) segs.push({ o: o, n: matNorm(prot.slice(a, b)).replace(/\uE000+/g, '/').replace(/\uE001/g, '.').replace(/\s*\/\s*/g, '/').replace(/^[\s\-–—*•·]+/, '').trim() }); }
+    while ((mm = SPLIT.exec(prot))) { push(last, mm.index); last = mm.index + mm[0].length; if (!mm[0].length) SPLIT.lastIndex++; }
+    push(last, prot.length);
+    var found = {}, autre = [], rem = [], lastId = null;
+    var FILL = /^(?:bonjour|bonsoir|salut|coucou|hello|merci|cordialement|a bientot|bien a vous|bonne (?:journee|soiree)|voici|voila|ci-?dessous|j'espere|svp|s'il vous plait|materiel)\b/;
+    var META = /\b(?:maison|chez moi|domicile|appartement|salle|jardin|exterieur|garage|salon|studio|espace|place|piece|bureau|poids du corps)\b/;
+    segs.forEach(function (sg) {
+      var t = sg.n, hit = false, ng = t.match(/\b(?:pas de|pas d'|pas d |aucun|aucune|sans|n'ai pas|n'ai plus|plus de|ni)\b/);
+      MAT_RULES.forEach(function (r) {
+        var m;
+        while ((m = r[1].exec(t))) {
+          t = t.slice(0, m.index) + new Array(m[0].length + 1).join(' ') + t.slice(m.index + m[0].length);
+          hit = true;
+          if (ng && m.index > ng.index) continue;
+          var d = matDetail(r[0], sg.n);
+          if (!found[r[0]]) found[r[0]] = { detail: d }; else if (!found[r[0]].detail) found[r[0]].detail = d;
+          lastId = r[0];
+        }
+      });
+      if (hit) return;
+      if (lastId && found[lastId]) { var d2 = matDetail(lastId, sg.n); if (d2 && (!found[lastId].detail || lastId === 'elastiques') && found[lastId].detail !== d2) { found[lastId].detail = found[lastId].detail && lastId === 'elastiques' ? found[lastId].detail + ', ' + d2 : d2; return; } }
+      if (FILL.test(t) || META.test(t) || ng) return;
+      var words = sg.o.split(/\s+/).length;
+      if (words > 6) { rem.push(sg.o); return; }
+      var s = sg.o, prev;
+      do { prev = s; s = s.replace(/^(?:j['’]ai|je dispose d(?:e|u|es)|je poss[eè]de|il y a|mon mat[eé]riel(?: est| :)?|comme mat[eé]riel|aussi|[ée]galement|en plus|un|une|des|du|de la|de l['’]|d['’]|le|la|les|mon|ma|mes)\s*/i, ''); } while (s !== prev);
+      s = s.replace(/[\s.!?]+$/, '');
+      if (s.replace(/[^a-zà-ÿ]/gi, '').length >= 3) autre.push(s);
+    });
+    var all = matNorm(orig), none = /(?:aucun|pas de|sans|rien)\s*(?:de\s*)?(?:materiel|equipement)|poids du corps|aucun materiel/.test(all);
+    var lieux = [];
+    if (/salle de sport|salle de fitness|a la salle|fitness|basic ?fit|club de sport/.test(all)) lieux.push('Salle de sport');
+    if (/maison|chez moi|domicile|appartement|salon|garage|chambre/.test(all)) lieux.push('Maison');
+    if (/jardin|exterieur|dehors|\bparc\b|terrasse|balcon/.test(all)) lieux.push('Extérieur');
+    if (/bureau/.test(all)) lieux.push('Bureau');
+    var espace = /petit (?:espace|appartement|studio)|peu de (?:place|espace)|studio|petite (?:piece|chambre)/.test(all) ? 'petit' : /grand espace|beaucoup (?:de )?(?:place|espace)|grande (?:piece|salle)|garage|plus de 3 ?m/.test(all) ? 'grand' : /espace moyen|2 a 3 ?m|piece moyenne|salon/.test(all) ? 'moyen' : '';
+    var items = [];
+    MB.MATERIEL_CATS.forEach(function (c) { c.items.forEach(function (it) { var f = found[it[0]]; if (f) items.push({ id: it[0], category: c.title, label: it[1], detail: f.detail || '' }); }); });
+    return { type: 'multiboost-materiel', version: 1, date: new Date().toISOString(), client: clientName || '', lieu: lieux.join(' · '), espace: espace, aucunMateriel: !items.length && none, materiel: items, autre: autre.join(', '), remarques: rem.join(' ').slice(0, 400), source: 'texte collé' };
+  }
+  function matRecap(data) {
+    var box = MB.h('<div class="stack"></div>'), line = function (x) { return x.label + (x.detail ? ' (' + x.detail + ')' : ''); };
+    function row(title, text) { var r = MB.h('<div><h4 style="margin:0 0 2px"></h4><p class="lede" style="margin:0"></p></div>'); MB.$('h4', r).textContent = title; MB.$('p', r).textContent = text; box.appendChild(r); }
+    if (data.aucunMateriel) row('Matériel', 'Aucun matériel (poids du corps)');
+    MB.MATERIEL_CATS.forEach(function (c) { var its = data.materiel.filter(function (x) { return x.category === c.title; }); if (its.length) row(c.title, its.map(line).join(' · ')); });
+    if (data.autre) row('Autre matériel', data.autre);
+    if (data.lieu || data.espace) row('Lieu et espace', [data.lieu, ESPACES[data.espace]].filter(Boolean).join(' · '));
+    if (data.remarques) row('Remarques du client', data.remarques);
+    return box;
+  }
+  function pasteMateriel(inForm) {
+    var p = inForm ? null : cur();
+    if (!inForm && !p) return;
+    MB.ui.form('Coller le matériel du client', [{ id: 'txt', label: 'Message ou liste du client (WhatsApp, e-mail, notes…)', type: 'textarea', rows: 9, required: true, placeholder: 'Ex. : J’ai un tapis, 2 haltères de 5 kg, des élastiques légère et moyenne, une chaise. Je m’entraîne au salon, petit espace.' }], 'Analyser').then(function (r) {
+      if (!r) return;
+      var name = (p && p.nom) || (inForm && $('#f-name') && $('#f-name').value.trim()) || '';
+      var data = parseMateriel(r.txt, name);
+      if (!data.materiel.length && !data.aucunMateriel && !data.autre) { MB.ui.toast('Aucun matériel reconnu dans ce texte. Essayez une liste simple (un élément par ligne).', 'warn'); return; }
+      MB.ui.modal({ title: 'Matériel reconnu : vérifiez avant d’importer', body: matRecap(data), className: 'modal-small', actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Importer dans le dossier', value: 'ok', kind: 'btn-primary' }] }).then(function (v) { if (v === 'ok') applyMateriel(data, inForm); });
+    });
   }
 
   /* ---------- Sauvegarde globale ---------- */
@@ -9278,6 +9378,8 @@ var MBCoach = (function () {
     $('#client-form').addEventListener('submit', submitClient);
     backupNote();
     setTimeout(function () { var a = backupAge(); if (S.patients && S.patients.length && (a === null || a >= 7)) MB.ui.toast(a === null ? 'Aucune sauvegarde faite : lancez une « Sauvegarde globale ».' : 'Dernière sauvegarde il y a ' + a + ' jours : pensez à en refaire une.', 'warn'); }, 4000);
+    $('#paste-materiel').addEventListener('click', function () { pasteMateriel(false); });
+    $('#paste-materiel-form').addEventListener('click', function () { pasteMateriel(true); });
     $('#import-materiel').addEventListener('change', function (e) { if (e.target.files[0]) importMateriel(e.target.files[0], false); e.target.value = ''; });
     $('#import-materiel-form').addEventListener('change', function (e) { if (e.target.files[0]) importMateriel(e.target.files[0], true); e.target.value = ''; });
     $('#import-all').addEventListener('change', function (e) { if (e.target.files[0]) importAll(e.target.files[0]); e.target.value = ''; });
