@@ -714,6 +714,15 @@ body.client-mode .coach-only { display: none !important; }
 .plan-strip-text strong { font-family: var(--font-display); font-size: 24px; line-height: 1.05; }
 .plan-strip .field { flex: 0 1 260px; }
 .hero-logos { position: relative; z-index: 1; }
+/* Logo à droite du suivi des séances faites ; onglet Séance : identité de la cliente masquée */
+.hero-progress { grid-template-columns: auto auto; column-gap: 18px; row-gap: 6px; align-items: center; }
+.hero-progress > * { grid-column: 1; }
+.hero-progress > .hero-logos { grid-column: 2; grid-row: 1 / span 6; align-self: center; }
+body[data-view="jour"] .hero { grid-template-columns: minmax(0, 1fr); }
+body[data-view="jour"] .hero > div:first-child { display: none; }
+body[data-view="jour"] .hero-progress { justify-self: end; }
+@media (max-width: 700px) { .hero-progress { grid-template-columns: 1fr auto; } .hero-progress > .hero-logos { justify-self: end; } body[data-view="jour"] .hero-progress { justify-self: stretch; } }
+
 
 /* Conseil du coach (par séance) */
 .coach-note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; margin: 14px 18px 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1.5px dashed var(--amber); }
@@ -7813,6 +7822,7 @@ var MBClient = (function () {
   function renderAll() {
     planVisibility();
     MB.views.nutrition($('#nutrition-host'), st.program, coachOn, changed); restoreDesign('nutrition');
+    document.body.dataset.view = view;
     renderHero(); renderReminder(); remSchedule(); renderDay(); renderMonth(); renderWeek(); renderGuide();
     MB.views.safety($('#safety-host')); restoreDesign('securite');
     renderMateriel();
@@ -7820,6 +7830,7 @@ var MBClient = (function () {
 
   function show(v) {
     view = v;
+    document.body.dataset.view = v;
     $$('.prog-view').forEach(function (s) { s.hidden = s.id !== 'vue-' + v; });
     $$('.prog-nav [data-view]').forEach(function (b) { b.classList.toggle('is-on', b.dataset.view === v); });
     if (v === 'exercices') {
