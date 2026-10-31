@@ -7446,7 +7446,13 @@ var MBClient = (function () {
         '<div style="display:flex;justify-content:space-between;font-size:12px;opacity:.7"><span>Plus léger</span><span>Plan prévu</span><span>Plus intense</span></div>' +
         '<div class="fb-adapt-lab" style="font-weight:600"></div><div class="fb-adapt-note" style="font-size:13px;opacity:.85"></div></div>');
       var rg = $('input', ad), lab = $('.fb-adapt-lab', ad), note = $('.fb-adapt-note', ad), sel = $('select', ad), selLab = $('label', ad);
-      if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; sel.hidden = true; selLab.hidden = true; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
+      if (isCoachFile) {
+        /* Aperçu client dans la page coach : le client verra sa jauge au milieu, quel que soit le niveau réglé par le coach */
+        rg.value = MB.DIFF_MID; rg.disabled = true; sel.disabled = true;
+        lab.textContent = 'Plan prévu';
+        note.hidden = false; note.textContent = 'Aperçu client : dans son fichier, la jauge démarre ici, au milieu (« Plan prévu »), quel que soit le niveau réglé en mode coach.';
+      }
+      else if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; sel.hidden = true; selLab.hidden = true; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
       else {
         var lastId = st.program.sessions[total - 1].id;
         for (var q = nextI; q < total; q++) sel.add(new Option('Séance ' + st.program.sessions[q].id + ' · ' + st.program.sessions[q].day + (q === nextI ? ' (la prochaine)' : ''), q));
