@@ -324,6 +324,24 @@ body.app { height: 100%; }
 .volet p { font-size: 14px; color: var(--ink-2); }
 /* Exercices dans les encarts Finisher / Retour au calme : même style que les exercices des séances */
 .volet.has-ex { grid-column: 1 / -1; }
+.ex-stage { position: relative; }
+.load-tog { position: absolute; left: 8px; bottom: 8px; display: flex; border-radius: 999px; overflow: hidden; background: rgba(20,20,24,.78); z-index: 3; font-size: 11.5px; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.load-tog button { border: 0; background: transparent; color: #f1f1f1; padding: 5px 11px; cursor: pointer; font: inherit; font-weight: 600; }
+.load-tog button.on { background: #fff; color: #1b1b1b; }
+.load-tog button[data-ld="1"].on { background: #e8590c; color: #fff; }
+@media print { .load-tog { display: none; } }
+
+.ex-stage.dual { display: grid; grid-template-columns: 1fr 1fr; }
+.ex-stage.dual .ex-canvas { min-width: 0; }
+.dual-lbl { position: absolute; bottom: 8px; z-index: 3; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(20,20,24,.78); color: #fff; }
+.dual-lbl.l0 { left: 8px; } .dual-lbl.l1 { right: 8px; background: #e8590c; }
+
+.opt-charge { color: #e8590c; font-weight: 600; }
+:root[data-theme="dark"] .opt-charge { color: #ff8a3d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .opt-charge { color: #ff8a3d; } }
+@media print { .opt-charge { color: #d9480f; } }
+
+.volets > .volet { grid-column: 1 / -1; }
 .volet-ex { display: grid; gap: 6px; margin-top: 4px; }
 .volet-ex .board.volet-board { background: transparent; border: 0; box-shadow: none; border-radius: 0; overflow: visible; }
 .volet-ex .board.volet-board .board-grid, .volet-ex .board.volet-board:not(.show-anim) .board-grid { padding: 6px 0 0; }
@@ -827,6 +845,7 @@ dialog.modal-picker { width: min(1180px, calc(100vw - 24px)); }
   .pr-volets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: auto; }
   .pr-volets > div { border-top: 2pt solid var(--board-head); padding-top: 1.5mm; }
   .pr-volets > div.has-ex { grid-column: 1 / -1; }
+  .pr-volets > div { grid-column: 1 / -1; }
   .pr-volet-grid { grid-template-columns: repeat(4, 1fr); margin-top: 1.5mm; }
   .pr-volets h4 { font-size: 9pt; margin: 0 0 1mm; }
   .pr-volets p { font-size: 8.5pt; color: #333; }
@@ -1815,6 +1834,26 @@ function buildProps(T, mats) {
     miniBand.castShadow = true; miniBand.receiveShadow = true;
     props.miniBand = miniBand;
 
+    // 7. Charges : haltères, lests (chevilles / poignets), disque
+    var loadGrp = new T.Group();
+    var mkDb = function () {
+      var g = new T.Group();
+      var hd = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, 0.13, 12), ironMat);
+      var h1 = new T.Mesh(new T.CylinderGeometry(0.05, 0.05, 0.045, 6), ironMat); h1.position.y = 0.078;
+      var h2 = h1.clone(); h2.position.y = -0.078;
+      g.add(hd); g.add(h1); g.add(h2);
+      g.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      g.visible = false; return g;
+    };
+    var mkCuff = function (r) {
+      var m = new T.Mesh(new T.CylinderGeometry(r, r, 0.075, 18), new T.MeshStandardMaterial({ color: 0xe8590c, roughness: 0.6 }));
+      m.castShadow = true; m.visible = false; return m;
+    };
+    var plateM = new T.Mesh(new T.CylinderGeometry(0.15, 0.15, 0.03, 28), ironMat); plateM.castShadow = true; plateM.visible = false;
+    loadGrp.add(mkDb()); loadGrp.add(mkDb()); loadGrp.add(mkCuff(0.062)); loadGrp.add(mkCuff(0.062)); loadGrp.add(mkCuff(0.046)); loadGrp.add(mkCuff(0.046)); loadGrp.add(plateM);
+    props.loadGrp = loadGrp;
+
+
     // 7. Banc de musculation réglable
     var bench = new T.Group();
     var bSeat = new T.Mesh(new T.BoxGeometry(0.3, 0.04, 0.4), mats.prop); bSeat.position.set(0, 0.4, -0.2); bench.add(bSeat);
@@ -2007,7 +2046,7 @@ function drawScene(ctx, type, phase, az, el, zoom) {
     if (ctx.props.miniBand) ctx.props.miniBand.visible = false;
     if (ctx.props.bench) ctx.props.bench.visible = false;
     if (ctx.props.handleL) { ctx.props.handleL.visible = false; ctx.props.handleR.visible = false; }
-    ['bandGrp', 'ropeGrp', 'cushGrp'].forEach(function (g) { ctx.props[g].children.forEach(function (o) { o.visible = false; }); });
+    ['bandGrp', 'ropeGrp', 'cushGrp', 'loadGrp'].forEach(function (g) { ctx.props[g].children.forEach(function (o) { o.visible = false; }); });
     ctx.props.medball.scale.setScalar(m.ballScale || 1);
 
     // S'IL Y A DU MATÉRIEL, ON L'ATTACHE AUX BONS ENDROITS
@@ -2088,6 +2127,37 @@ function drawScene(ctx, type, phase, az, el, zoom) {
       if (m.acc.indexOf('handlesFeet') !== -1) {
         handles(); var gL = new T3.Vector3(), gR = new T3.Vector3(); rg.legs.L.ankle.getWorldPosition(gL); rg.legs.R.ankle.getWorldPosition(gR);
         seg(P.bandGrp.children[0], aL, new T3.Vector3(gL.x, 0.02, gL.z)); seg(P.bandGrp.children[1], aR, new T3.Vector3(gR.x, 0.02, gR.z));
+      }
+      if (m.acc.indexOf('bandKnees') !== -1 || m.acc.indexOf('bandAnkles') !== -1) {
+        var bj = m.acc.indexOf('bandAnkles') !== -1 ? 'ankle' : 'knee', bA = new T3.Vector3(), bB = new T3.Vector3();
+        rg.legs.L[bj].getWorldPosition(bA); rg.legs.R[bj].getWorldPosition(bB); seg(P.bandGrp.children[0], bA, bB);
+      }
+      if (m.acc.indexOf('dumbbells') !== -1 || m.acc.indexOf('dumbbellsUp') !== -1 || m.acc.indexOf('dumbbell1') !== -1) {
+        var dUp = m.acc.indexOf('dumbbellsUp') !== -1, dAx = dUp ? new T3.Vector3(0, 1, 0) : new T3.Vector3(0, 0, 1);
+        [[P.loadGrp.children[0], aL], [P.loadGrp.children[1], aR]].forEach(function (h, i) {
+          if (m.acc.indexOf('dumbbell1') !== -1 && i === 0) return;
+          h[0].visible = true; h[0].position.copy(h[1]); if (!dUp) h[0].position.y -= 0.05;
+          h[0].quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), dAx);
+        });
+      }
+      if (m.acc.indexOf('dbChest') !== -1) {
+        var cd = new T3.Vector3().subVectors(aR, aL); if (cd.length() < 0.05) cd.set(1, 0, 0);
+        var dc = P.loadGrp.children[0]; dc.visible = true; dc.position.addVectors(aL, aR).multiplyScalar(0.5);
+        dc.quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), cd.normalize());
+      }
+      var ringOn = function (o, A, B, f) { var d = new T3.Vector3().subVectors(B, A); o.visible = true; o.position.copy(A).addScaledVector(d, f); o.scale.set(1, 1, 1); o.quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), d.normalize()); };
+      if (m.acc.indexOf('cuffAnkles') !== -1) {
+        ['L', 'R'].forEach(function (s, i) { var k = new T3.Vector3(), a = new T3.Vector3(); rg.legs[s].knee.getWorldPosition(k); rg.legs[s].ankle.getWorldPosition(a); ringOn(P.loadGrp.children[2 + i], k, a, 0.86); });
+      }
+      if (m.acc.indexOf('cuffWrists') !== -1) {
+        ['L', 'R'].forEach(function (s, i) { var e2 = new T3.Vector3(), a = new T3.Vector3(); rg.arms[s].elbow.getWorldPosition(e2); rg.arms[s].hand.getWorldPosition(a); ringOn(P.loadGrp.children[4 + i], e2, a, 0.85); });
+      }
+      if (m.acc.indexOf('plate') !== -1 || m.acc.indexOf('plateThighs') !== -1) {
+        var pp = new T3.Vector3(); rg.pitch.getWorldPosition(pp); var pl = P.loadGrp.children[6]; pl.visible = true; pl.quaternion.identity();
+        if (m.acc.indexOf('plateThighs') !== -1) {
+          var kA = new T3.Vector3(), kB = new T3.Vector3(); rg.legs.L.knee.getWorldPosition(kA); rg.legs.R.knee.getWorldPosition(kB);
+          kA.add(kB).multiplyScalar(0.5); pl.position.addVectors(pp, kA).multiplyScalar(0.5); pl.position.y += 0.09;
+        } else { pl.position.copy(pp); pl.position.y += 0.12; }
       }
       if (m.acc.indexOf('bandsFeet') !== -1 && P.stick.visible) {
         var dx = new T3.Vector3().subVectors(aL, aR).normalize(), mid2 = new T3.Vector3().addVectors(aL, aR).multiplyScalar(0.5), fL = new T3.Vector3(), fR = new T3.Vector3();
@@ -2231,14 +2301,19 @@ function drawScene(ctx, type, phase, az, el, zoom) {
 
   return {
     define: define,
+    get: function (t) { return MOVES[t]; },
     equipOf: function (t) {
       var m = MOVES[t]; if (!m) return 'Sans matériel';
       var a = m.acc || [];
       if (m.equip === 'stick') return a.indexOf('bandsFeet') !== -1 ? 'Core bar + élastique' : 'Core bar';
       if (m.equip === 'barbell') return 'Barre & poids';
       if (m.equip === 'kettlebell') return 'Kettlebell';
+      if (a.indexOf('dumbbells') !== -1 || a.indexOf('dumbbellsUp') !== -1 || a.indexOf('dumbbell1') !== -1 || a.indexOf('dbChest') !== -1) return 'Haltères';
+      if (a.indexOf('cuffAnkles') !== -1 || a.indexOf('cuffWrists') !== -1) return 'Lests 1 kg';
+      if (a.indexOf('plate') !== -1 || a.indexOf('plateThighs') !== -1) return 'Disque / haltère';
       if (m.equip === 'medball') return 'Medball';
       if (m.equip === 'miniband') return 'Mini-bande';
+      if (a.indexOf('bandKnees') !== -1 || a.indexOf('bandAnkles') !== -1) return 'Élastique (bande)';
       if (m.equip === 'handles' || a.indexOf('handlesFeet') !== -1 || a.indexOf('handles') !== -1) return 'Élastique & poignées';
       return 'Sans matériel';
     },
@@ -2528,6 +2603,11 @@ function drawScene(ctx, type, phase, az, el, zoom) {
     var br = sin1(p), Sh = [0.3, 0.35];
     var t = deg(Math.acos((Sh[1] - 0.12) / 1.37)) - 1.2 * br, tr = t * D2R;
     return { z: Sh[0] - 0.5 * Math.sin(tr), y: Sh[1] - 0.5 * Math.cos(tr), lean: t, head: t - 4, breath: br, legs: sym({ th: -t, sh: -t, f: 72 }), arms: sym({ ua: 0, fa: 90, ha: 90, abd: 6 }) };
+  } });
+  def('plank_saw', { dur: 4.4, az: 64, snap: 0.25, mat: true, focus: ['core'], pose: function (p) {
+    var d = cyc(p), Sh = [0.3, 0.35], dz = 0.14 * d;
+    var t = deg(Math.acos((Sh[1] - 0.12) / 1.37)), tr = t * D2R;
+    return { z: Sh[0] + dz - 0.5 * Math.sin(tr), y: Sh[1] - 0.5 * Math.cos(tr), lean: t, head: t - 4, breath: 0, legs: sym({ th: -t, sh: -t, f: 72 }), arms: sym({ ua: -deg(Math.atan(dz / 0.29)), fa: 90, ha: 90, abd: 6 }) };
   } });
   def('high_plank', { dur: 4, az: 64, snap: 0.25, mat: true, focus: ['core', 'upper'], pose: function (p) {
     var br = sin1(p), hp = highPlank(0.34);
@@ -2991,6 +3071,69 @@ function drawScene(ctx, type, phase, az, el, zoom) {
   } });
 
   // 14. Bascule arrière assise avec élastiques (Poignées)
+  /* ---- Animations propres au programme de Julie ---- */
+  function bandVariant(id, base, acc) { var b = MB3D.get(base); if (b) MB3D.define(id, Object.assign({}, b, { acc: acc })); }
+  bandVariant('clamshell_band', 'clamshell', ['bandKnees']);
+  bandVariant('fire_hydrant_band', 'fire_hydrant', ['bandKnees']);
+  bandVariant('abduction_band', 'standing_abduction', ['bandAnkles']);
+  bandVariant('kickback_band', 'standing_kickback', ['bandAnkles']);
+  bandVariant('bridge_band', 'bridge', ['bandKnees']);
+  bandVariant('shuffle_band', 'shuffle', ['bandKnees']);
+  def('reverse_table', { dur: 3.6, az: 70, snap: 0.5, mat: true, focus: ['glute', 'core', 'upper'], pose: function (p) {
+    var d = cyc(p), y = 0.40 + 0.10 * d, bt = 10 * D2R, shz = -0.5 * Math.cos(bt);
+    return { z: 0, y: y, lean: -80, head: -72, legs: sym({ ik: [0.45, 0.085], f: 0 }), arms: sym({ ik: [shz - 0.06, 0.085], bend: 1, ha: -80, abd: 6 }) };
+  } });
+  def('jab_cross_uppercut', { dur: 2.4, az: 40, snap: 0.25, focus: ['upper', 'core'], pose: function (p) {
+    var k = Math.min(2, Math.floor(p * 3)), d = cyc(p * 3 - k), sp = fightStance();
+    var punch = { ua: lerp(GUARD.ua, 88, d), fa: lerp(GUARD.fa, 90, d), abd: lerp(14, 2, d) };
+    var cut = { ua: lerp(10, 70, d), fa: lerp(100, 160, d), abd: lerp(10, -4, d) };
+    if (k === 0) { sp.twist = -24 * d; sp.arms = { L: punch, R: GUARD }; }
+    else if (k === 1) { sp.twist = 24 * d; sp.arms = { L: GUARD, R: punch }; }
+    else { sp.y -= 0.05 * (1 - d); sp.twist = -20 * d; sp.arms = { L: cut, R: GUARD }; }
+    return sp;
+  } });
+  def('bear_plank_taps', { dur: 2.8, az: 30, snap: 0.25, mat: true, focus: ['core', 'upper', 'thigh'], pose: function (p) {
+    var a = alt(p), d = cyc(a.q), sp = quad({ y: 0.56, legs: sym({ ik: [-0.22, 0.1], f: 70 }) });
+    sp.x = 0.03 * d * (a.first ? -1 : 1);
+    var s = S(sp);
+    var tap = { ik: [s[0] - 0.05 * d, lerp(0.085, s[1] - 0.12, d)], bend: -1, ha: lerp(90, 40, d), abd: lerp(8, -38, d) };
+    var stay = { ik: [s[0], 0.085], bend: -1, ha: 90, abd: 8 };
+    sp.arms = pair(a.first, tap, stay);
+    return sp;
+  } });
+  /* ---- Variantes « avec charge » ---- */
+  function loadVar(base, id, acc, opt) {
+    var b = MB3D.get(base); if (!b) return; opt = opt || {};
+    var d = Object.assign({}, b, { acc: (b.acc || []).concat(acc) }); if (opt.equip) d.equip = opt.equip;
+    if (opt.arms) { var bp = b.pose; d.pose = function (p) { var r = Object.assign({}, bp(p)); r.arms = opt.arms(r, p); return r; }; }
+    MB3D.define(id, d);
+  }
+  var ARMS_CHEST = function () { return sym(CHEST); }, ARMS_HANG = function () { return sym({ ua: 4, fa: 8, abd: 8 }); };
+  loadVar("sumo_squat", "sumo_squat_charge", [], { equip: 'kettlebell', arms: ARMS_CHEST });
+  loadVar("squat_pulse", "squat_pulse_charge", [], { equip: 'kettlebell', arms: ARMS_CHEST });
+  loadVar("prisoner_squat", "prisoner_squat_charge", [], { equip: 'kettlebell', arms: ARMS_CHEST });
+  loadVar("curtsy_lunge", "curtsy_lunge_charge", [], { equip: 'kettlebell', arms: ARMS_CHEST });
+  loadVar("lunge", "lunge_charge", ["dumbbells"], { arms: ARMS_HANG });
+  loadVar("good_morning", "good_morning_charge", ["dbChest"], { arms: ARMS_CHEST });
+  loadVar("sl_deadlift", "sl_deadlift_charge", ["dumbbell1"], {});
+  loadVar("uppercuts", "uppercuts_charge", ["dumbbellsUp"], {});
+  loadVar("jab_cross_uppercut", "jab_cross_uppercut_charge", ["dumbbellsUp"], {});
+  loadVar("frog_pump", "frog_pump_charge", ["plate"], {});
+  loadVar("sl_bridge", "sl_bridge_charge", ["plate"], {});
+  loadVar("bridge_march", "bridge_march_charge", ["plate"], {});
+  loadVar("wallsit", "wallsit_charge", ["plateThighs"], {});
+  loadVar("dips", "dips_charge", ["plateThighs"], {});
+  loadVar("donkey_kick", "donkey_kick_charge", ["cuffAnkles"], {});
+  loadVar("side_leg_raise", "side_leg_raise_charge", ["cuffAnkles"], {});
+  loadVar("fire_hydrant", "fire_hydrant_charge", ["cuffAnkles"], {});
+  loadVar("standing_abduction", "standing_abduction_charge", ["cuffAnkles"], {});
+  loadVar("standing_kickback", "standing_kickback_charge", ["cuffAnkles"], {});
+  loadVar("front_kick", "front_kick_charge", ["cuffAnkles"], {});
+  loadVar("march", "march_charge", ["cuffAnkles"], {});
+  loadVar("superman", "superman_charge", ["cuffAnkles", "cuffWrists"], {});
+  loadVar("bird_dog", "bird_dog_charge", ["cuffAnkles", "cuffWrists"], {});
+  loadVar("arm_circles", "arm_circles_charge", ["cuffWrists"], {});
+  loadVar("prone_y", "prone_y_charge", ["cuffWrists"], {});
   def('mac_assise_elastique', { acc: ['bands'], anchor: { z: 1.0, y: 0.55 }, dur: 5, az: 45, snap: 0.5, equip: 'handles', focus: ['core', 'thigh'], pose: function (p) { 
       var d = cyc(p);
       return { z: -0.4, y: 0.25, lean: lerp(0, -30, d), head: lerp(0, -20, d), legs: sym(kneelStretch()), arms: sym({ ua: lerp(20, -10, d), fa: lerp(60, 20, d), abd: lerp(10, 45, d) }) }; 
@@ -3246,6 +3389,62 @@ MB.EXERCISE_ROWS = [
    "L'isométrie de base pour la sangle abdominale. En appui sur les coudes et les pointes de pieds.\n\nPoints clés pour réussir :\n• Rétroverser légèrement le bassin (rentrer les fesses et le ventre) pour engager les abdos profonds.\n• Repousser activement le sol avec les avant-bras (épaules actives).\n• Maintenir une ligne droite stricte tête-bassin-talons.", 
    'Posez les genoux dès que le dos se creuse.', 'front plank', 'planche|gainage|plank|planche ventrale|gainage ventral'],
   
+  ['plank_saw', 'Planche va-et-vient (body saw)', 'Gainage & abdos', 'Transverse, grands droits, épaules', '', 
+   "Planche sur les avant-bras avec les pieds sur une serviette : le corps glisse d'avant en arrière en restant gainé, les coudes restent fixes.\n\nPoints clés pour réussir :\n• Garder une ligne droite tête-bassin-talons pendant tout le glissement.\n• Avancer les épaules de 10 à 15 cm devant les coudes, puis revenir lentement.\n• Rétroverser le bassin et ne jamais creuser le bas du dos.", 
+   'Réduisez l\'amplitude ou posez les genoux dès que le dos se creuse.', 'forearm plank saw', 'planche va-et-vient|planche va et vient|body saw|saw plank|planche avant-bras va-et-vient'],
+  
+  ['clamshell_band', 'Clamshell avec élastique', 'Fessiers', 'Moyen fessier, rotateurs externes', '', 
+   "Clamshell allongé sur le côté avec une mini-bande élastique au-dessus des genoux : l'élastique augmente la résistance à l'ouverture.\n\nPoints clés pour réussir :\n• Garder les pieds joints et le bassin stable, sans basculer vers l'arrière.\n• Ouvrir le genou du dessus sans bouger le bassin.\n• Revenir lentement en gardant la tension sur l'élastique.", 
+   'Réduisez la tension de l\'élastique si le bassin bascule.', 'clamshell with band', 'clamshell elastique|clamshell avec elastique|coquille elastique'],
+  ['fire_hydrant_band', 'Fire hydrant avec élastique', 'Fessiers', 'Moyen fessier, abducteurs', '', 
+   "À quatre pattes, mini-bande au-dessus des genoux : ouvrir la jambe sur le côté contre la résistance de l'élastique.\n\nPoints clés pour réussir :\n• Garder le dos plat et le bassin horizontal.\n• Lever le genou sans déhancher.\n• Redescendre lentement, sans relâcher l'élastique.", 
+   'Gardez le bassin stable : ne tournez pas le buste.', 'banded fire hydrant', 'fire hydrant elastique|fire hydrant avec elastique'],
+  ['abduction_band', 'Abduction debout à l\'élastique', 'Fessiers', 'Moyen fessier, équilibre', '', 
+   "Debout, élastique aux chevilles : écarter la jambe sur le côté, jambe tendue, en gardant le buste droit.\n\nPoints clés pour réussir :\n• Prendre appui d'une main sur un mur si besoin.\n• Ne pas pencher le buste du côté opposé.\n• Contrôler le retour jambe.", 
+   'Appui au mur recommandé en cas de déséquilibre.', 'banded standing hip abduction', 'abduction elastique|abduction debout elastique'],
+  ['kickback_band', 'Kickback debout à l\'élastique', 'Fessiers', 'Grand fessier', '', 
+   "Debout, élastique aux chevilles : envoyer une jambe en arrière, sans cambrer le dos, en contractant le fessier.\n\nPoints clés pour réussir :\n• Gainer le ventre et garder le buste droit.\n• Ne pas cambrer : le mouvement vient de la hanche.\n• Revenir lentement.", 
+   'Appui au mur recommandé.', 'banded standing glute kickback', 'kickback elastique|kickback debout elastique'],
+  ['bridge_band', 'Pont fessier avec élastique', 'Fessiers', 'Grands et moyens fessiers, ischio-jambiers', '', 
+   "Pont fessier avec mini-bande au-dessus des genoux : pousser les genoux vers l'extérieur contre l'élastique en montant le bassin.\n\nPoints clés pour réussir :\n• Pousser à travers les talons.\n• Garder les genoux alignés sur les pieds, sans les laisser rentrer.\n• Serrer les fessiers en haut.", 
+   'Ne cambrez pas le bas du dos en haut du mouvement.', 'banded glute bridge', 'pont fessier elastique|glute bridge elastique'],
+  ['shuffle_band', 'Pas chassés avec élastique', 'Cardio', 'Fessiers, adducteurs, agilité', '', 
+   "Demi-squat, mini-bande au-dessus des genoux : déplacements latéraux en gardant la tension de l'élastique.\n\nPoints clés pour réussir :\n• Rester bas, dos droit, genoux dans l'axe des pieds.\n• Pas courts, sans jamais joindre les pieds.\n• Garder la tension sur l'élastique.", 
+   'Réduisez l\'amplitude si les genoux rentrent.', 'monster walk', 'pas chasses elastique|monster walk|marche laterale elastique'],
+  ['reverse_table', 'Planche inversée jambes fléchies (table)', 'Gainage & abdos', 'Fessiers, ischio-jambiers, épaules', '', 
+   "Assis, mains derrière soi, pieds à plat : monter le bassin pour former une table, genoux à 90°.\n\nPoints clés pour réussir :\n• Pousser dans les mains et dans les talons.\n• Garder les hanches hautes, tête dans le prolongement.\n• Épaules loin des oreilles.", 
+   'Ménagez les poignets : tournez les doigts vers l\'extérieur si besoin.', 'reverse tabletop', 'planche inversee jambes flechies|table top|reverse tabletop|planche table'],
+  ['jab_cross_uppercut', 'Enchaînement jab-cross-uppercut', 'Cardio', 'Épaules, bras, obliques, cardio', '', 
+   "Enchaînement de boxe en trois temps : direct du bras avant (jab), direct du bras arrière (cross), puis uppercut.\n\nPoints clés pour réussir :\n• Pivoter les hanches et le buste sur chaque coup.\n• Garder la garde haute, menton rentré.\n• Rythme régulier, sans à-coup.", 
+   'Ne verrouillez pas les coudes en bout de coup.', 'boxing combination jab cross uppercut', 'jab cross uppercut|enchainement boxe|jab-cross-uppercut'],
+  ['bear_plank_taps', 'Planche de l\'ours — touchers d\'épaule', 'Gainage & abdos', 'Transverse, épaules, quadriceps', '', 
+   "En position de l'ours (genoux à 2 cm du sol), toucher alternativement chaque épaule avec la main opposée sans bouger les hanches.\n\nPoints clés pour réussir :\n• Garder le dos plat et les hanches immobiles.\n• Genoux décollés d'environ 2 cm du sol.\n• Mouvement lent et contrôlé.", 
+   'Écartez légèrement les pieds pour plus de stabilité.', 'bear plank shoulder taps', 'planche ours toucher epaule|bear plank taps|bear taps'],
+  ["sumo_squat_charge", "Sumo squat goblet (kettlebell)", "Bas du corps", "Quadriceps, fessiers, adducteurs", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Kettlebell tenue contre la poitrine par la corne, coudes serrés.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "sumo squat goblet (kettlebell)", "sumo squat goblet (kettlebell)|sumo squat avec charge"],
+  ["squat_pulse_charge", "Squat pulsé goblet (kettlebell)", "Bas du corps", "Quadriceps, fessiers", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Kettlebell tenue contre la poitrine par la corne, coudes serrés.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "squat pulsé goblet (kettlebell)", "squat pulsé goblet (kettlebell)|squat pulse avec charge"],
+  ["prisoner_squat_charge", "Squat goblet tempo (kettlebell)", "Bas du corps", "Quadriceps, fessiers", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Kettlebell ou disque tenu contre la poitrine, coudes serrés.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "squat goblet tempo (kettlebell)", "squat goblet tempo (kettlebell)|prisoner squat avec charge"],
+  ["curtsy_lunge_charge", "Fente croisée avec kettlebell", "Bas du corps", "Fessiers, quadriceps, adducteurs", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Kettlebell ou haltère tenu contre la poitrine.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "fente croisée avec kettlebell", "fente croisée avec kettlebell|curtsy lunge avec charge"],
+  ["lunge_charge", "Fente arrière avec haltères", "Bas du corps", "Quadriceps, fessiers", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Un haltère dans chaque main, bras le long du corps.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "fente arrière avec haltères", "fente arrière avec haltères|lunge avec charge"],
+  ["good_morning_charge", "Good morning avec haltère", "Bas du corps", "Ischio-jambiers, fessiers, lombaires", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Haltère tenu à deux mains contre la poitrine (ou barre légère sur les épaules).\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "good morning avec haltère", "good morning avec haltère|good morning avec charge"],
+  ["sl_deadlift_charge", "Soulevé de terre unipodal avec haltère", "Bas du corps", "Ischio-jambiers, fessiers, équilibre", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Haltère ou kettlebell tenu dans la main opposée à la jambe d'appui.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "soulevé de terre unipodal avec haltère", "soulevé de terre unipodal avec haltère|sl deadlift avec charge"],
+  ["uppercuts_charge", "Uppercuts avec petits haltères", "Cardio", "Épaules, bras, obliques", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Petits haltères dans les mains (1 à 2 kg), poignets alignés.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "uppercuts avec petits haltères", "uppercuts avec petits haltères|uppercuts avec charge"],
+  ["jab_cross_uppercut_charge", "Jab-cross-uppercut avec petits haltères", "Cardio", "Épaules, bras, obliques, cardio", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Petits haltères dans les mains (1 à 2 kg), poignets alignés.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "jab-cross-uppercut avec petits haltères", "jab-cross-uppercut avec petits haltères|jab cross uppercut avec charge"],
+  ["frog_pump_charge", "Frog pump avec charge", "Fessiers", "Grand fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Haltère ou disque posé sur le bassin, maintenu à deux mains.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "frog pump avec charge", "frog pump avec charge|frog pump avec charge"],
+  ["sl_bridge_charge", "Pont fessier unilatéral avec charge", "Fessiers", "Grand fessier, ischio-jambiers", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Haltère ou disque posé sur le bassin, maintenu à deux mains.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "pont fessier unilatéral avec charge", "pont fessier unilatéral avec charge|sl bridge avec charge"],
+  ["bridge_march_charge", "Bridge march avec charge", "Fessiers", "Grand fessier, ischio-jambiers, sangle", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Haltère ou disque posé sur le bassin, maintenu à deux mains.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "bridge march avec charge", "bridge march avec charge|bridge march avec charge"],
+  ["wallsit_charge", "Chaise au mur avec disque", "Bas du corps", "Quadriceps, fessiers", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Disque ou haltère posé sur les cuisses, maintenu à deux mains.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "chaise au mur avec disque", "chaise au mur avec disque|wallsit avec charge"],
+  ["dips_charge", "Dips au banc avec disque", "Haut du corps", "Triceps, épaules", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Disque posé sur les cuisses, amplitude réduite si l'épaule tire.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "dips au banc avec disque", "dips au banc avec disque|dips avec charge"],
+  ["donkey_kick_charge", "Donkey kick avec lests", "Fessiers", "Grand fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "donkey kick avec lests", "donkey kick avec lests|donkey kick avec charge"],
+  ["side_leg_raise_charge", "Élévation latérale allongée avec lests", "Fessiers", "Moyen fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "élévation latérale allongée avec lests", "élévation latérale allongée avec lests|side leg raise avec charge"],
+  ["fire_hydrant_charge", "Fire hydrant avec lests", "Fessiers", "Moyen fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "fire hydrant avec lests", "fire hydrant avec lests|fire hydrant avec charge"],
+  ["standing_abduction_charge", "Abduction debout avec lests", "Fessiers", "Moyen fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "abduction debout avec lests", "abduction debout avec lests|standing abduction avec charge"],
+  ["standing_kickback_charge", "Kickback debout avec lests", "Fessiers", "Grand fessier", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "kickback debout avec lests", "kickback debout avec lests|standing kickback avec charge"],
+  ["front_kick_charge", "Coups de pied avant avec lests", "Cardio", "Quadriceps, fléchisseurs de hanche, équilibre", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "coups de pied avant avec lests", "coups de pied avant avec lests|front kick avec charge"],
+  ["march_charge", "Marche genoux hauts avec lests", "Cardio", "Fléchisseurs de hanche, cardio", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "marche genoux hauts avec lests", "marche genoux hauts avec lests|march avec charge"],
+  ["superman_charge", "Superman avec lests", "Haut du corps", "Lombaires, fessiers, haut du dos", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux poignets et aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "superman avec lests", "superman avec lests|superman avec charge"],
+  ["bird_dog_charge", "Bird dog avec lests", "Gainage & abdos", "Transverse, fessiers, lombaires", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux poignets et aux chevilles.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "bird dog avec lests", "bird dog avec lests|bird dog avec charge"],
+  ["arm_circles_charge", "Cercles de bras avec lests", "Haut du corps", "Deltoïdes, coiffe des rotateurs", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux poignets.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "cercles de bras avec lests", "cercles de bras avec lests|arm circles avec charge"],
+  ["prone_y_charge", "Élévations Y allongé avec lests", "Haut du corps", "Trapèzes inférieurs, deltoïdes postérieurs", "", "Même mouvement que la version sans charge, avec une charge légère.\n\nPoints clés pour réussir :\n• Lests de 1 kg aux poignets.\n• Garder la même technique et le même tempo qu'à vide.\n• Choisir une charge qui permet de finir toutes les répétitions sans cambrer ni compenser.", "Passez à la version sans charge dès que la technique se dégrade.", "élévations y allongé avec lests", "élévations y allongé avec lests|prone y avec charge"],
   ['high_plank', 'Planche bras tendus', 'Gainage & abdos', 'Gainage, épaules', '', 
    "Variante de la planche en position haute d'une pompe. Travaille d'avantage la stabilité scapulaire.\n\nPoints clés pour réussir :\n• Mains vissées dans le sol, légèrement plus écartées que les épaules.\n• Verrouiller les coudes (sans hyper-extension) et contracter les triceps.\n• Contracter les fessiers pour verrouiller le bassin.", 
    'Poignets sensibles : passez sur les avant-bras.', 'high plank', 'planche haute|planche bras tendus|high plank'],
@@ -3781,7 +3980,7 @@ MB.customLoad();
 
 MB.PROGRAM_TEMPLATE = {
   programName: 'Programme Silhouette 360°',
-  client: { name: 'Julie M.', age: '40 ans', location: 'Maison (0 matériel)', goal: 'Affiner & raffermir la silhouette (taille, fessiers, bras)', schedule: '3 séances / semaine • 45 à 60 min (Lun / Mer / Ven)', health: 'Sans impact néfaste, protection périnée & articulations' },
+  client: { name: 'Julie M.', age: '40 ans', location: 'Maison (0 matériel)', goal: 'Affiner & raffermir la silhouette (taille, fessiers, bras)', schedule: '3 séances / semaine • 45 à 60 min (Lun / Mer / Ven)', health: 'Protection des articulations' },
   weeks: [
     { num: 1, theme: 'Phase 1 : Amorçage & tonicité', desc: 'Apprentissage des trajectoires articulaires, gainage sans à-coups et premier circuit 4-5 cycles.', sessions: [1, 2, 3] },
     { num: 2, theme: 'Phase 2 : Densification & Tabata', desc: 'Augmentation de la densité musculaire, tempo maîtrisé et activation de l’effet afterburn métabolique.', sessions: [4, 5, 6] },
@@ -3811,7 +4010,7 @@ MB.PROGRAM_TEMPLATE = {
         { title: 'Gainage latéral sur avant-bras', subtitle: '20-30 secondes par côté, alignement strict coude-bassin-pieds', svgType: 'side_plank' } ] },
     { id: 3, week: 1, day: 'Vendredi', leftHeader: 'Semaine 1 (Phase 1)', rightHeader: '3 séries complètes en 35"/25"\n25 secs de repos entre chaque exercice\n2 min de repos entre chaque série', centerBanner: 'Vendredi (Silhouette Dynamique & Bras)',
       warmup: 'Mobilisation des poignets, rotations d’épaules et pas chassés rythmés sans impact.',
-      finisher: '4 cycles d’étirement hypopressif en posture assise, dos allongé vers le plafond.',
+      finisher: 'Gainage planche sur avant-bras, 3 séries de 30 s avec 30 s de repos.',
       cooldown: 'Décompression de la nuque et des trapèzes, étirement doux de la chaîne dorsale.',
       exercises: [
         { title: 'Sumo squats', subtitle: '10-15 répétitions, pieds larges, activation ciblée des adducteurs', svgType: 'sumo_squat' },
@@ -3848,7 +4047,7 @@ MB.PROGRAM_TEMPLATE = {
         { title: 'Planche & step-burpees', subtitle: 'Bloc 3 (4 min) : alterner 20" planche avant-bras / 10" repos / 20" step-burpees / 10" repos', svgType: 'plank' } ] },
     { id: 7, week: 3, day: 'Lundi', leftHeader: 'Semaine 3 (Phase 3)', rightHeader: 'EMOM 18 minutes (6 tours de 3 min)\nDépart chaque minute, repos sur le temps restant\nMin 1 : squats + pompes | Min 2 : fentes + climbers | Min 3 : bridges + planche', centerBanner: 'Lundi (EMOM Polyarticulaire 18 min)',
       warmup: 'Gammes d’activation articulaires complètes, 15 squats légers.',
-      finisher: 'Routine hypopressive : 5 séries de 10 s d’apnée expiratoire.',
+      finisher: 'Gainage latéral sur avant-bras, 3 séries de 25 s par côté.',
       cooldown: 'Posture du chat-vache (cat-cow) pour la colonne et étirements doux.',
       exercises: [
         { title: 'Minute 1 : squats + pompes', subtitle: '12 air squats + 6 pompes sur genoux, repos le restant', svgType: 'squat' },
@@ -3864,7 +4063,7 @@ MB.PROGRAM_TEMPLATE = {
         { title: 'Mountain climbers', subtitle: '20 reps ➔ 15 reps ➔ 10 reps ➔ 5 reps par jambe', svgType: 'climber' },
         { title: 'Pompes sur genoux', subtitle: '10 reps ➔ 8 reps ➔ 6 reps ➔ 4 reps avec technique stricte', svgType: 'pompes' } ] },
     { id: 9, week: 3, day: 'Vendredi', leftHeader: 'Semaine 3 (Phase 3)', rightHeader: 'E2MOM 20 minutes (10 blocs de 2 min)\nDépart toutes les 2 minutes\nRepos sur le temps restant dans les 2 minutes', centerBanner: 'Vendredi (E2MOM Galbe Fessier & Taille 20 min)',
-      warmup: 'Mobilité des hanches, cercles de genoux et activation périnéale.',
+      warmup: 'Mobilité des hanches, cercles de genoux et activation des fessiers.',
       finisher: 'Gainage latéral avec élévation du bassin (3 séries de 30 secondes par côté).',
       cooldown: 'Étirement du psoas-iliaque et des quadriceps, retour au calme.',
       exercises: [
@@ -3884,7 +4083,7 @@ MB.PROGRAM_TEMPLATE = {
         { title: 'Step-burpees', subtitle: '6 répétitions complètes avec extension verticale sans saut', svgType: 'step_burpee' } ] },
     { id: 11, week: 4, day: 'Mercredi', leftHeader: 'Semaine 4 (Phase 4)', rightHeader: 'Tabata quatuor métabolique (4 blocs de 4 min)\n10 secs de repos entre intervalles 20"\n2 min de repos entre chaque bloc', centerBanner: 'Mercredi (Tabata Quatuor Métabolique 4 blocs)',
       warmup: 'Montée thermique progressive et mobilisations articulaires 10 min.',
-      finisher: 'Travail respiratoire hypopressif allongé (5 cycles de 8-10 s).',
+      finisher: 'Dead bug et bird dog : 3 séries de 10 alternances.',
       cooldown: 'Décompression totale du dos et relâchement des cuisses.',
       exercises: [
         { title: 'Squats & fentes', subtitle: 'Bloc 1 (4 min) : alterner 20" squats / 10" repos / 20" fentes arrière / 10" repos', svgType: 'squat' },
@@ -3909,7 +4108,6 @@ MB.PROGRAM_TEMPLATE = {
 
 MB.DEFAULT_LIBRARY = [
   { id: 'lib_hit_invictus', title: 'Manuel HIT Invictus — haute intensité poids de corps', category: 'Protocole HIT & musculation', type: 'Fiche interne', driveUrl: '', notes: 'Protocoles Tabata 20/10, HIIT 30/30, circuits dégressifs et EMOM. Effet afterburn (EPOC).' },
-  { id: 'lib_perinee', title: 'Protocole sécurité périnée & plancher pelvien', category: 'Santé & plancher pelvien', type: 'Fiche interne', driveUrl: '', notes: 'Zéro manœuvre de Valsalva, suppression des impacts violents (fentes arrière et step-burpees sans saut), finisher hypopressif systématique.' },
   { id: 'lib_pacing_zone2', title: 'Protocole pacing cardiaque & mitochondries', category: 'Protocole HIT & musculation', type: 'Fiche interne', driveUrl: '', notes: 'Gestion de l’effort par plafond cardiaque (FC sous 115 bpm), récupération nerveuse 48 h entre séances.' },
   { id: 'lib_nutri_keto', title: 'Protocole nutrition cétogène & anti-inflammatoire', category: 'Nutrition cétogène & pacing', type: 'Fiche interne', driveUrl: '', notes: 'Sans gluten, sans lactose, sans œuf, sans sucre raffiné. Graisses saines, protéines 1,2-1,5 g/kg.' }
 ];
@@ -3918,7 +4116,6 @@ MB.SAFETY = [
   { title: 'Plancher pelvien & pression', tone: 'amber', text: 'Pas d’apnée à l’effort (manœuvre de Valsalva). Expirez bouche ouverte pendant la phase d’effort. Mouvements sans à-coups ni sauts violents.' },
   { title: 'Articulations & genoux', tone: 'petrol', text: 'Les fentes arrière remplacent les fentes avant pour limiter le cisaillement fémoro-patellaire. Genoux alignés sur le 2e orteil, sans valgus.' },
   { title: 'Récupération nerveuse', tone: 'danger', text: 'Séances calibrées sous 55 minutes pour éviter l’élévation chronique du cortisol. 48 h de repos entre deux séances intenses.' },
-  { title: 'Respiration hypopressive', tone: 'ok', text: 'Fausse inspiration thoracique en fin de séance pour tonifier le transverse profond et soulager la pression sur les organes pelviens.' }
 ];
 
 /* ---------- Utilitaires de programme ---------- */
@@ -3971,6 +4168,34 @@ MB.isTimedSession = function (s) {
 };
 /* Sous les exercices : aucun texte par défaut, uniquement la note ajoutée par le coach (ex.note) */
 MB.exSub = function (s, ex) { return String((ex && ex.note) || ''); };
+/* « Option charge : … » affichée en orange sous l'exercice */
+MB.setNote = function (el, txt) {
+  txt = String(txt || ''); var i = txt.indexOf('Option charge');
+  if (i < 0) { el.textContent = txt; return; }
+  el.textContent = ''; el.appendChild(document.createTextNode(txt.slice(0, i)));
+  var sp = document.createElement('span'); sp.className = 'opt-charge'; sp.textContent = txt.slice(i); el.appendChild(sp);
+};
+MB.noteHtml = function (txt) {
+  txt = String(txt || ''); var i = txt.indexOf('Option charge');
+  return i < 0 ? MB.esc(txt) : MB.esc(txt.slice(0, i)) + '<span class="opt-charge">' + MB.esc(txt.slice(i)) + '</span>';
+};
+
+/* Durée estimée d'une séance : échauffement + circuit (séries x exercices x (effort + récup) + repos) + finisher + retour au calme */
+MB.estDuration = function (s) {
+  try {
+    var h = String((s && s.rightHeader) || ''), m;
+    var n = (m = h.match(/(\d+)\s*séries?/i)) ? +m[1] : 5;
+    var eff = (m = h.match(/(\d+)\s*s\s*(?:d['’]\s*)?effort/i)) ? +m[1] : 50;
+    var rec = (m = h.match(/(\d+)\s*s\s*(?:de\s*)?récup/i)) ? +m[1] : 20;
+    var rest = (m = h.match(/(\d+)\s*min(?:\s*(\d+))?\s*(?:de\s*)?repos/i)) ? (+m[1]) * 60 + (+m[2] || 0) : 90;
+    var k = (s.exercises || []).length;
+    if (!k) return 0;
+    var min = function (txt, def) { var q = String(txt || '').match(/(\d+)\s*min/); return q ? +q[1] : def; };
+    var tot = (n * k * (eff + rec) + Math.max(0, n - 1) * rest) / 60 + min(s.warmup, 8) + min(s.cooldown, 5) + (s.finisher ? min(s.finisher, 5) : 0);
+    return Math.max(5, Math.round(tot / 5) * 5);
+  } catch (e) { return 0; }
+};
+
 
 /* ---------- Jauge de difficulté : adapte tout le plan (séries, temps de travail, repos, nombre d'exercices) ---------- */
 MB.DIFF_MAX = 9; MB.DIFF_MID = 5;
@@ -4111,7 +4336,7 @@ MB.parseTextToSessions = function (text) {
       }
     });
     res.push({ id: n, week: Math.ceil(n / 3), day: 'Séance ' + n, leftHeader: 'Semaine ' + Math.ceil(n / 3), rightHeader: '4 à 5 cycles\n30–45 secs entre chaque exercice\n2–3 min de repos entre chaque cycle', centerBanner: 'Séance ' + n,
-      warmup: 'Déverrouillage articulaire complet 8-10 min.', finisher: 'Finisher hypopressif 5 min.', cooldown: 'Décompression lombaire 5 min.',
+      warmup: 'Déverrouillage articulaire complet 8-10 min.', finisher: 'Finisher gainage 5 min.', cooldown: 'Décompression lombaire 5 min.',
       exercises: ex.length ? ex : [{ title: 'Air squat', subtitle: '8-12 répétitions', svgType: 'squat' }, { title: 'Pompes genoux', subtitle: '6-10 répétitions', svgType: 'pompes' }, { title: 'Pont fessier', subtitle: '12-15 répétitions', svgType: 'bridge' }, { title: 'Gainage planche', subtitle: '30 secondes', svgType: 'plank' }] });
   }
   return res.length ? res : null;
@@ -4278,7 +4503,7 @@ MB.DEFAULT_SETTINGS = {
   heroTitle: 'Bougez mieux, *chez vous.*',
   offerTitle: 'Coaching sport santé à la maison',
   offerIntro: 'Des programmes au poids du corps, sans matériel, pensés pour votre santé : renforcement, silhouette, nutrition. Chaque exercice est animé en 3D et votre coach ajuste tout au fil des semaines.',
-  bio: 'Coach sport santé, je construis des programmes à faire chez soi, sans matériel, adaptés à votre corps et à votre rythme : dos, genoux et périnée protégés, progression maîtrisée, et un vrai suivi pour ne pas lâcher.',
+  bio: 'Coach sport santé, je construis des programmes à faire chez soi, sans matériel, adaptés à votre corps et à votre rythme : dos et genoux protégés, progression maîtrisée, et un vrai suivi pour ne pas lâcher.',
   testimonials: [],
   faq: [
     { q: 'Je n’ai pas fait de sport depuis longtemps, est-ce pour moi ?', a: 'Oui. Le bilan sert justement à partir de votre niveau réel. Les premières séances sont progressives et chaque exercice a une version plus douce.' },
@@ -4743,7 +4968,7 @@ MB.board = {};
 /* ---------- Titres des encarts : modifiables + « Appliquer partout » ---------- */
 MB.board.BOXES = [
   { key: 'warmup', def: 'Échauffement articulaire', short: 'Échauffement' },
-  { key: 'finisher', def: 'Finisher hypopressif & périnée', short: 'Finisher' },
+  { key: 'finisher', def: 'Finisher', short: 'Finisher' },
   { key: 'cooldown', def: 'Retour au calme & posture', short: 'Retour au calme' },
   { key: 'coachNote', def: 'Conseil du coach', short: 'Conseil du coach' }
 ];
@@ -4841,19 +5066,21 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
   var ce = opts.editable ? ' contenteditable="true" spellcheck="false"' : '';
   var lines = String(s.rightHeader || '').split(/\r?\n/).filter(Boolean);
   var el = MB.h('<section class="board" aria-label="Planche de la séance">' +
-    '<header class="board-head"><div class="board-week"><span class="board-kicker">Séance ' + MB.esc(s.id) + ' · ' + MB.esc(s.day) + '</span><span class="board-week-title" data-f="leftHeader"' + ce + '></span></div>' +
+    '<header class="board-head"><div class="board-week"><span class="board-kicker">Séance ' + MB.esc(s.id) + ' · ' + MB.esc(s.day) + '</span><span class="board-week-title" data-f="leftHeader"' + ce + '></span><span class="board-kicker board-est"></span></div>' +
     '<div class="board-rules" data-f="rightHeader"' + ce + '></div></header>' +
     '<div class="board-banner" data-f="centerBanner"' + ce + '></div>' +
     '<div class="board-warmup"><div class="board-warmup-head"><h4></h4><span class="volet-time">10 min</span></div><p data-f="warmup" data-placeholder="Décrivez l’échauffement de cette séance"' + ce + '></p></div>' +
     '<div class="coach-note' + (s.coachNote ? '' : ' is-empty') + '"><span class="coach-note-ic">' + MB.icon('info') + '</span><div><div class="coach-note-head"><strong></strong></div><p data-f="coachNote" data-placeholder="Ajoutez un conseil pour cette séance (ressenti, consigne, encouragement)…"' + ce + '></p></div></div>' +
     '<div class="board-grid"></div></section>');
   MB.$('[data-f=leftHeader]', el).textContent = s.leftHeader || '';
+  var estD = MB.estDuration(s), estB = MB.$('.board-est', el); if (estD) estB.textContent = '⏱ Durée estimée ≈ ' + estD + ' min'; else estB.hidden = true;
   MB.$('[data-f=centerBanner]', el).textContent = s.centerBanner || '';
   MB.$('[data-f=coachNote]', el).textContent = s.coachNote || '';
   var ttlOpts = { editable: !!opts.editable, onChange: opts.onChange };
   MB.board.decorate(MB.$('.board-warmup-head', el), MB.$('.board-warmup-head h4', el), s, 'warmup', prog, ttlOpts);
   MB.board.decorate(MB.$('.coach-note-head', el), MB.$('.coach-note-head strong', el), s, 'coachNote', prog, ttlOpts);
   var wu = MB.$('[data-f=warmup]', el); wu.textContent = s.warmup || '';
+  (function () { var q = String(s.warmup || '').match(/(\d+)\s*min/), tm = MB.$('.board-warmup-head .volet-time', el); if (q && tm) tm.textContent = q[1] + ' min'; })();
   if (opts.editable) wu.addEventListener('input', function () { s.warmup = wu.innerText.trim(); opts.onChange && opts.onChange(); });
   else if (!s.warmup) MB.$('.board-warmup', el).hidden = true;
   var rules = MB.$('[data-f=rightHeader]', el);
@@ -4871,11 +5098,22 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
         (opts.onDelete ? '<button type="button" class="icon-btn icon-btn-sm" data-del title="Retirer cet exercice" aria-label="Retirer cet exercice">' + MB.icon('trash') + '</button>' : '') + '</span>' : '') +
       '</div></article>');
     MB.$('.ex-title', card).textContent = ex.title;
-    MB.$('.ex-sub', card).textContent = MB.exSub(s, ex);
+    MB.setNote(MB.$('.ex-sub', card), MB.exSub(s, ex));
     if (!MB.exSub(s, ex) && !opts.editable) MB.$('.ex-sub', card).hidden = true;
     grid.appendChild(card);
     var cv = MB.$('canvas', card);
     att(cv, ex.svgType);
+    var ldType = ex.chargeType;
+    if (ldType && MB3D.has && MB3D.has(ldType) && MB.EXERCISES[ldType]) {
+      var stg = MB.$('.ex-stage', card); stg.classList.add('dual');
+      var cv2 = document.createElement('canvas'); cv2.className = 'ex-canvas'; cv2.setAttribute('aria-label', 'Animation 3D avec charge');
+      stg.insertBefore(cv2, cv.nextSibling);
+      stg.appendChild(MB.h('<span class="dual-lbl l0">Sans charge</span>')); stg.appendChild(MB.h('<span class="dual-lbl l1">Avec charge</span>'));
+      att(cv2, ldType);
+      var acts = MB.$('.ex-actions', card), b2 = MB.h('<button type="button" class="btn btn-ghost btn-sm" data-demo2>' + MB.icon('rotate') + '<span>3D avec charge</span></button>');
+      acts.insertBefore(b2, MB.$('[data-demo]', card).nextSibling);
+      b2.addEventListener('click', function () { MB.viewer.open(ldType, (MB.EXERCISES[ldType] || {}).name || ex.title, MB.exSub(s, ex)); });
+    }
     MB.$('[data-demo]', card).addEventListener('click', function () { MB.viewer.open(ex.svgType, ex.title, MB.exSub(s, ex)); });
     var del = MB.$('[data-del]', card);
     if (del) del.addEventListener('click', function () { opts.onDelete(i); });
@@ -4883,7 +5121,7 @@ MB.board.render = function (host, prog, sessionIdx, opts) {
     if (swap) swap.addEventListener('click', function () {
       MB.picker.open({ current: ex.svgType, title: 'Remplacer « ' + ex.title + ' »' }).then(function (type) {
         if (!type) return;
-        ex.svgType = type; ex.title = MB.EXERCISES[type].name;
+        delete ex.chargeType; ex.svgType = type; ex.title = MB.EXERCISES[type].name;
         MB.$('.ex-title', card).textContent = ex.title;
         var ncv = document.createElement('canvas'); ncv.className = 'ex-canvas'; cv.replaceWith(ncv); cv = ncv; att(ncv, type);
         opts.onChange && opts.onChange();
@@ -4939,7 +5177,7 @@ MB.board.exList = function (wrap, s, list, opts) {
         '<button type="button" class="icon-btn icon-btn-sm" data-del title="Retirer cet exercice" aria-label="Retirer cet exercice">' + MB.icon('trash') + '</button></span>' : '') +
       '</div></article>');
     MB.$('.ex-title', card).textContent = ex.title;
-    MB.$('.ex-sub', card).textContent = ex.note || '';
+    MB.setNote(MB.$('.ex-sub', card), ex.note || '');
     if (!ex.note && !opts.editable) MB.$('.ex-sub', card).hidden = true;
     grid.appendChild(card);
     var cv = MB.$('canvas', card);
@@ -4953,7 +5191,7 @@ MB.board.exList = function (wrap, s, list, opts) {
     if (swap) swap.addEventListener('click', function () {
       MB.picker.open({ current: ex.svgType, title: 'Remplacer « ' + ex.title + ' »' }).then(function (type) {
         if (!type) return;
-        ex.svgType = type; ex.title = MB.EXERCISES[type].name;
+        delete ex.chargeType; ex.svgType = type; ex.title = MB.EXERCISES[type].name;
         MB.$('.ex-title', card).textContent = ex.title;
         var ncv = document.createElement('canvas'); ncv.className = 'ex-canvas'; cv.replaceWith(ncv); cv = ncv; att(ncv, type);
         opts.onChange && opts.onChange();
@@ -4976,11 +5214,11 @@ MB.board.exList = function (wrap, s, list, opts) {
 MB.board.volets = function (host, s, editable, onChange, only, prog) {
   host.innerHTML = '';
   var ce = editable ? ' contenteditable="true" spellcheck="false"' : '';
-  [['warmup', 'Échauffement articulaire', '10 min'], ['finisher', 'Finisher hypopressif & périnée', '5 min'], ['cooldown', 'Retour au calme & posture', '5 min']].forEach(function (v, i) {
+  [['warmup', 'Échauffement articulaire', '10 min'], ['finisher', 'Finisher', '5-10 min'], ['cooldown', 'Retour au calme & posture', '5 min']].forEach(function (v, i) {
     if (only && only.indexOf(v[0]) === -1) return;
     var key = v[0], canEx = key === 'finisher' || key === 'cooldown';
     var box = MB.h('<div class="volet volet-' + i + '"><div class="volet-head"><h4></h4><span class="volet-time"></span></div><p' + ce + '></p></div>');
-    MB.$('.volet-time', box).textContent = v[2];
+    MB.$('.volet-time', box).textContent = (function () { var q = String(s[key] || '').match(/(\d+)\s*min/); return q ? q[1] + ' min' : v[2]; })();
     MB.board.decorate(MB.$('.volet-head', box), MB.$('h4', box), s, key, prog, { editable: editable, onChange: onChange });
     var p = MB.$('p', box); p.textContent = (s && s[key]) || '';
     if (editable) p.addEventListener('input', function () { s[key] = p.innerText.trim(); onChange && onChange(); });
@@ -5886,7 +6124,7 @@ MB.printProgram = function (prog, opts) {
       var img = snap(x.svgType);
       var info = MB.EXERCISES[x.svgType] || {};
       return '<figure class="pr-ex"><div class="pr-ex-img">' + (img ? '<img src="' + img + '" alt="">' : '<span>' + e(info.name || '') + '</span>') + '<b>' + (i + 1) + '</b></div>' +
-        '<figcaption><strong>' + e(x.title) + '</strong><span>' + e(MB.exSub(s, x)) + '</span>' + (info.cues ? '<em>' + e(info.cues) + '</em>' : '') + '</figcaption></figure>';
+        '<figcaption><strong>' + e(x.title) + '</strong><span>' + MB.noteHtml(MB.exSub(s, x)) + '</span>' + (info.cues ? '<em>' + e(info.cues) + '</em>' : '') + '</figcaption></figure>';
     };
     var ex = s.exercises.map(fig).join('');
     var volets = ['warmup', 'finisher', 'cooldown'].map(function (k) {
@@ -5896,7 +6134,7 @@ MB.printProgram = function (prog, opts) {
         (exs.length ? '<div class="pr-grid pr-volet-grid">' + exs.map(fig).join('') + '</div>' : '') + '</div>';
     }).join('');
     return '<section class="pr-page">' + miniHead('Séance ' + s.id + ' · ' + s.day) +
-      '<div class="pr-band"><div class="pr-band-week"><span>Séance ' + e(s.id) + ' · ' + e(s.day) + '</span><strong>' + e(s.leftHeader) + '</strong></div><ul class="pr-band-rules">' + rules + '</ul></div>' +
+      '<div class="pr-band"><div class="pr-band-week"><span>Séance ' + e(s.id) + ' · ' + e(s.day) + '</span><strong>' + e(s.leftHeader) + '</strong>' + (MB.estDuration(s) ? '<span>⏱ Durée estimée ≈ ' + MB.estDuration(s) + ' min</span>' : '') + '</div><ul class="pr-band-rules">' + rules + '</ul></div>' +
       '<div class="pr-banner">' + e(s.centerBanner) + '</div>' +
       (s.coachNote ? '<div class="pr-note"><strong>' + e(MB.board.title(s, 'coachNote')) + '</strong><p>' + e(s.coachNote) + '</p></div>' : '') +
       '<div class="pr-grid">' + ex + '</div>' +
@@ -7897,6 +8135,7 @@ var MBClient = (function () {
       }
     } catch (e) {}
     st.fileStamp = D.savedAt || 0;
+    if (!isCoachFile) { var nx = st.program.sessions.findIndex(function (s) { return st.completed.indexOf(s.id) === -1; }); if (nx > 0) { idx = nx; week = st.program.sessions[nx].week || week; } }
     document.title = MB.BRAND.name + ' · ' + (st.program.client.name || 'Programme');
     if (!isCoachFile) { $('#mode-switch').remove(); $('#format-bar').remove(); document.body.classList.add('client-file'); }
     $('#prog-foot').textContent = MB.BRAND.name + ' · ' + MB.BRAND.tagline + ' · Programme préparé par ' + ((D.coach && D.coach.name) || 'votre coach');
@@ -8193,7 +8432,7 @@ var MBSales = (function () {
       }).join('') + '</div><p class="s-packs-note">Tarifs TTC. Votre coach vous confirme la formule la plus adaptée lors du bilan.</p></div></section>';
   }
   function safety() {
-    var it = [['Progressivité', 'Les charges et volumes augmentent par étapes, semaine après semaine.'], ['Zéro impact inutile', 'Des variantes sans saut pour chaque exercice dynamique.'], ['Dos & périnée protégés', 'Pas d’apnée bloquée, gainage profond, postures contrôlées.'], ['Écoute du corps', 'Le coaching ne remplace pas un avis médical : en cas de doute, on demande à votre médecin.']];
+    var it = [['Progressivité', 'Les charges et volumes augmentent par étapes, semaine après semaine.'], ['Zéro impact inutile', 'Des variantes sans saut pour chaque exercice dynamique.'], ['Dos & genoux protégés', 'Pas d’apnée bloquée, gainage profond, postures contrôlées.'], ['Écoute du corps', 'Le coaching ne remplace pas un avis médical : en cas de doute, on demande à votre médecin.']];
     return '<section class="s-sec"><div class="s-wrap"><div class="s-sec-head"><h2>Votre santé d’abord</h2><p>La méthode Multi Boost est née du sport santé : efficace, mais jamais au prix de vos articulations.</p></div><div class="s-safe">' +
       it.map(function (x) { return '<article><h3>' + x[0] + '</h3><p>' + x[1] + '</p></article>'; }).join('') + '</div></div></section>';
   }
