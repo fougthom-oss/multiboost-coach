@@ -7386,20 +7386,29 @@ var MBClient = (function () {
   function renderCoachGauge(host, s) {
     var total = st.program.sessions.length, lastId = st.program.sessions[total - 1].id;
     var card = MB.h('<section class="fb-card coach-gauge" aria-label="Difficulté du plan"><h3>Difficulté du plan (coach)</h3>' +
-      '<div class="fb-adapt" style="display:grid;gap:6px"><span class="fb-label" id="cg-l">Régler la difficulté à partir de cette séance</span>' +
+      '<div class="fb-adapt" style="display:grid;gap:6px"><label class="fb-label" for="cg-from">Régler à partir de quelle séance ?</label><select id="cg-from" style="max-width:100%"></select>' +
+      '<span class="fb-label" id="cg-l">Difficulté</span>' +
       '<input type="range" min="1" max="9" step="1" aria-labelledby="cg-l" style="width:100%">' +
       '<div style="display:flex;justify-content:space-between;font-size:12px;opacity:.7"><span>Plus léger</span><span>Plan d’origine</span><span>Plus intense</span></div>' +
       '<div class="cg-lab" style="font-weight:600"></div><div class="cg-note" style="font-size:13px;opacity:.85"></div></div></section>');
-    var rg = $('input', card), lab = $('.cg-lab', card), note = $('.cg-note', card);
+    var sel = $('select', card), rg = $('input', card), lab = $('.cg-lab', card), note = $('.cg-note', card);
+    st.program.sessions.forEach(function (x, i) {
+      sel.add(new Option((i === 0 ? 'Séance ' + x.id + ' (tout le plan)' : 'Séance ' + x.id + ' · ' + x.day) + (i === idx ? ' — affichée' : ''), i));
+    });
+    sel.value = (st.gf && st.gf.idx === idx && st.gf.from < total) ? st.gf.from : idx;
+    var fid = function () { return st.program.sessions[+sel.value].id; };
     var shown = function (v) {
       lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', '');
-      note.textContent = 'S’applique de la séance ' + s.id + (lastId !== s.id ? ' à la séance ' + lastId : '') + ', vos retouches sont conservées. ' + MB.diffSummary(v) + ' Dans le fichier client, ce niveau devient le « plan prévu » et la jauge du client repart au milieu.';
+      note.textContent = 'S’applique de la séance ' + fid() + (lastId !== fid() ? ' à la séance ' + lastId : '') + ', vos retouches sont conservées. ' + MB.diffSummary(v) + ' Dans le fichier client, ce niveau devient le « plan prévu » et la jauge du client repart au milieu.';
     };
-    rg.value = MB.diffLevelFor(st.program, s.id); shown(+rg.value);
+    rg.value = MB.diffLevelFor(st.program, fid()); shown(+rg.value);
+    sel.addEventListener('change', function () { st.gf = { idx: idx, from: +sel.value }; rg.value = MB.diffLevelFor(st.program, fid()); shown(+rg.value); });
     rg.addEventListener('input', function () { shown(+rg.value); });
     rg.addEventListener('change', function () {
-      MB.applyDifficulty(st.program, +rg.value, idx); changed(); renderAll();
-      MB.ui.toast('Séances ' + s.id + (lastId !== s.id ? ' à ' + lastId : '') + ' : ' + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
+      var f = +sel.value, id0 = fid();
+      st.gf = { idx: idx, from: f };
+      MB.applyDifficulty(st.program, +rg.value, f); changed(); renderAll();
+      MB.ui.toast('Séances ' + id0 + (lastId !== id0 ? ' à ' + lastId : '') + ' : ' + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
     });
     host.appendChild(card);
   }
@@ -7432,19 +7441,26 @@ var MBClient = (function () {
     if (!ro) {
       var nextI = idx + 1, total = st.program.sessions.length;
       var ad = MB.h('<div class="fb-adapt" style="display:grid;gap:6px"><span class="fb-label" id="fb-adapt-l">Adapter mes prochaines séances</span>' +
+        '<label class="fb-label" for="fb-from" style="font-weight:500;font-size:13px">À partir de la séance</label><select id="fb-from" style="max-width:100%"></select>' +
         '<input type="range" min="1" max="9" step="1" aria-labelledby="fb-adapt-l" style="width:100%">' +
         '<div style="display:flex;justify-content:space-between;font-size:12px;opacity:.7"><span>Plus léger</span><span>Plan prévu</span><span>Plus intense</span></div>' +
         '<div class="fb-adapt-lab" style="font-weight:600"></div><div class="fb-adapt-note" style="font-size:13px;opacity:.85"></div></div>');
-      var rg = $('input', ad), lab = $('.fb-adapt-lab', ad), note = $('.fb-adapt-note', ad);
-      if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
+      var rg = $('input', ad), lab = $('.fb-adapt-lab', ad), note = $('.fb-adapt-note', ad), sel = $('select', ad), selLab = $('label', ad);
+      if (nextI >= total) { rg.disabled = true; rg.value = MB.DIFF_MID; lab.textContent = ''; sel.hidden = true; selLab.hidden = true; note.textContent = 'C’est la dernière séance du plan : rien à adapter ensuite.'; }
       else {
-        var nid = st.program.sessions[nextI].id, lastId = st.program.sessions[total - 1].id;
+        var lastId = st.program.sessions[total - 1].id;
+        for (var q = nextI; q < total; q++) sel.add(new Option('Séance ' + st.program.sessions[q].id + ' · ' + st.program.sessions[q].day + (q === nextI ? ' (la prochaine)' : ''), q));
+        sel.value = (st.cgf && st.cgf.idx === idx && st.cgf.from >= nextI && st.cgf.from < total) ? st.cgf.from : nextI;
+        var nid = function () { return st.program.sessions[+sel.value].id; };
         var shown = function (v) { lab.textContent = MB.DIFF_LABELS[v].replace(' (plan d’origine)', ''); note.textContent = ''; note.hidden = true; };
-        rg.value = MB.diffLevelFor(st.program, nid); shown(+rg.value);
+        rg.value = MB.diffLevelFor(st.program, nid()); shown(+rg.value);
+        sel.addEventListener('change', function () { st.cgf = { idx: idx, from: +sel.value }; rg.value = MB.diffLevelFor(st.program, nid()); shown(+rg.value); });
         rg.addEventListener('input', function () { shown(+rg.value); });
         rg.addEventListener('change', function () {
-          MB.applyDifficulty(st.program, +rg.value, nextI); changed(); renderAll();
-          MB.ui.toast('Séances ' + nid + (lastId !== nid ? ' à ' + lastId : '') + ' adaptées : ' + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
+          var f = +sel.value, id0 = nid();
+          st.cgf = { idx: idx, from: f };
+          MB.applyDifficulty(st.program, +rg.value, f); changed(); renderAll();
+          MB.ui.toast('Séances ' + id0 + (lastId !== id0 ? ' à ' + lastId : '') + ' adaptées : ' + MB.DIFF_LABELS[+rg.value].replace(' (plan d’origine)', '') + '.');
         });
       }
       card.insertBefore(ad, card.children[2]);
